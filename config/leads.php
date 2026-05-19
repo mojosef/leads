@@ -91,7 +91,6 @@ return [
     */
 
     'defaults' => [
-        'prospect_queue_id' => env('LEADS_PROSPECT_QUEUE_ID', 5),
         'office_id' => env('LEADS_OFFICE_ID', 21),
     ],
 
@@ -115,27 +114,58 @@ return [
     | Facebook
     |--------------------------------------------------------------------------
     |
-    | A lead is "Facebook eligible" (i.e. should also fire a CAPI Lead event)
-    | when its lead_source_id is in this list OR when an fbclid was captured.
+    | sites: per-site Facebook credentials. The FacebookLeadService looks up
+    |   the entry matching the Lead's `site` column and uses those credentials
+    |   for the CAPI call. Required when the admin app processes leads from
+    |   multiple sites — each brand has its own Pixel ID and access token.
+    |
+    |   Pixel IDs are not secret (they appear in page HTML) so hardcode them
+    |   here. Access tokens ARE secret — pull them from env.
+    |
+    |   If no per-site entry exists, FacebookLeadService falls back to the
+    |   global esign/laravel-conversions-api config (single-tenant setup).
     |
     */
 
     'facebook' => [
-        'lead_source_ids' => array_filter(array_map('intval', explode(',', (string) env('LEADS_FB_SOURCE_IDS', '59')))),
+        'sites' => [
+            // 'elect-club' => [
+            //     'pixel_id' => '1124100455670536',
+            //     'access_token' => env('FB_ELECT_CLUB_TOKEN'),
+            //     'test_code' => env('FB_ELECT_CLUB_TEST_CODE'),
+            // ],
+            // 'attractive-partners' => [
+            //     'pixel_id' => '...',
+            //     'access_token' => env('FB_ATTRACTIVE_PARTNERS_TOKEN'),
+            // ],
+        ],
     ],
 
     /*
     |--------------------------------------------------------------------------
-    | Per-form-key overrides
+    | Per-form-key configuration
     |--------------------------------------------------------------------------
+    |
+    | fb_eligible — when true, every lead from this form fires a Facebook
+    |   CAPI 'Lead' event regardless of whether an fbclid was captured.
+    |   Use it for forms that live exclusively on Facebook ad landing pages
+    |   where the click ID is reliable enough you want CAPI even when the
+    |   cookie is lost in transit (mobile redirects, consent gates).
+    |
+    | office_id — override the default Duo office routing for this form.
     |
     | Example:
     |   'forms' => [
-    |       'ppc_contact' => ['lead_source_id' => 57],
+    |       'ppc_contact'  => ['fb_eligible' => true],
+    |       'paid_search'  => ['fb_eligible' => true],
+    |       'membership'   => ['office_id' => 17],
     |   ],
     |
     */
 
-    'forms' => [],
+    'forms' => [
+        'ppc_contact' => ['fb_eligible' => true],
+        'paid_search' => ['fb_eligible' => true],
+    ],
 
 ];

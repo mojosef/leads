@@ -96,6 +96,33 @@ php artisan leads:dispatch-pending --site=elect-club --limit=20
 php artisan leads:dispatch-pending --dry-run
 ```
 
+### Facebook CAPI credentials (admin app)
+
+When the admin app processes leads for multiple brands, each Lead's `site` column is used to look up the right Facebook credentials. Configure in `config/leads.php`:
+
+```php
+'facebook' => [
+    'sites' => [
+        'elect-club' => [
+            'pixel_id' => '1124100455670536',
+            'access_token' => env('FB_ELECT_CLUB_TOKEN'),
+            'test_code' => env('FB_ELECT_CLUB_TEST_CODE'),
+        ],
+        'attractive-partners' => [
+            'pixel_id' => '...',
+            'access_token' => env('FB_ATTRACTIVE_PARTNERS_TOKEN'),
+        ],
+        // ... one entry per brand
+    ],
+],
+```
+
+Pixel IDs are not secret — hardcode them. Access tokens are — `env()` them. Test codes only matter for staging.
+
+If no per-site entry exists, the service falls back to the global `conversions-api.*` config (used by single-tenant frontends until they're switched to admin-app delivery).
+
+### Cron schedule
+
 Schedule both delivery commands on a per-minute cron:
 
 ```php

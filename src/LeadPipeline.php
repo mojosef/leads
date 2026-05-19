@@ -27,22 +27,12 @@ class LeadPipeline
         $formDefaults = (array) config("leads.forms.$formKey", []);
         $defaults = (array) config('leads.defaults', []);
 
-        $leadSourceId = $overrides['lead_source_id']
-            ?? $formDefaults['lead_source_id']
-            ?? $defaults['lead_source_id']
-            ?? null;
-
         $lead = new Lead;
         $lead->id = (string) Str::ulid();
         $lead->forceFill([
             'site' => (string) config('leads.site'),
             'form_key' => $formKey,
             'status' => Lead::STATUS_DRAFT,
-            'lead_source_id' => $leadSourceId,
-            'prospect_queue_id' => $overrides['prospect_queue_id']
-                ?? $formDefaults['prospect_queue_id']
-                ?? $defaults['prospect_queue_id']
-                ?? null,
             'office_id' => $overrides['office_id']
                 ?? $formDefaults['office_id']
                 ?? $defaults['office_id']
@@ -51,7 +41,7 @@ class LeadPipeline
             'attribution' => $snapshot['attribution'],
             'cookies' => $snapshot['cookies'],
             'fb_event_id' => (string) Str::ulid(),
-            'fb_eligible' => $this->computeFacebookEligibility($leadSourceId, $snapshot['cookies']),
+            'fb_eligible' => $this->computeFacebookEligibility($formKey, $snapshot['cookies']),
             'ip_address' => $snapshot['ip_address'],
             'user_agent' => $snapshot['user_agent'],
             'previous_url' => $snapshot['previous_url'],
@@ -91,11 +81,6 @@ class LeadPipeline
             if ($value !== null && $value !== '') {
                 $lead->{$column} = $value;
             }
-        }
-
-        if (isset($data['lead_source_id'])) {
-            $lead->lead_source_id = (int) $data['lead_source_id'];
-            $lead->fb_eligible = $this->computeFacebookEligibility($lead->lead_source_id, (array) $lead->cookies);
         }
 
         $lead->payload = array_replace((array) $lead->payload, $data);
@@ -252,18 +237,12 @@ class LeadPipeline
         return "leads.draft.$formKey";
     }
 
-    private function computeFacebookEligibility(?int $leadSourceId, array $cookies): bool
+    private function computeFacebookEligibility(string $formKey, array $cookies): bool
     {
         if (! empty($cookies['fbclid'])) {
             return true;
         }
 
-        if ($leadSourceId === null) {
-            return false;
-        }
-
-        $fbSourceIds = (array) config('leads.facebook.lead_source_ids', []);
-
-        return in_array((int) $leadSourceId, $fbSourceIds, true);
+        return (bool) config("leads.forms.$formKey.fb_eligible", false);
     }
 }

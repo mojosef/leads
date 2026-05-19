@@ -62,13 +62,11 @@ class Lead extends Model
             return true;
         }
 
-        if (! empty($this->cookies['fbclid'] ?? null)) {
+        if (! empty(($this->cookies ?? [])['fbclid'] ?? null)) {
             return true;
         }
 
-        $fbSourceIds = (array) config('leads.facebook.lead_source_ids', []);
-
-        return $this->lead_source_id !== null && in_array((int) $this->lead_source_id, $fbSourceIds, true);
+        return (bool) config("leads.forms.{$this->form_key}.fb_eligible", false);
     }
 
     public function markSending(): void
@@ -145,7 +143,6 @@ class Lead extends Model
         $urlParameters['facebook_fbc'] = $cookies['_fbc'] ?? ($urlParameters['facebook_fbc'] ?? '');
 
         $structured = array_filter([
-            'prospect_queue_id' => $this->prospect_queue_id,
             'office' => $this->office_id,
             'fname' => $this->fname,
             'lname' => $this->lname,
@@ -153,7 +150,6 @@ class Lead extends Model
             'contact' => $this->contact,
             'town' => $this->town,
             'page_referrer' => $this->previous_url,
-            'lead_source_id' => $this->lead_source_id,
             'location_header' => $this->country_code,
         ], static fn ($value) => $value !== null && $value !== '');
 
