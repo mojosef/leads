@@ -116,9 +116,20 @@ class Lead extends Model
         ])->save();
     }
 
+    public function isQuestionnaireCompleted(): bool
+    {
+        return ! empty(($this->payload ?? [])['questionnaire_completed_at']);
+    }
+
     /**
      * Build the outbound payload for the Duo CRM /lead/create endpoint.
-     * Mirrors the legacy form shape so Duo's attribution dashboards keep working.
+     * Merges the form's raw payload (so custom fields like dob/gender/
+     * accepts_email_marketing reach Duo unchanged) with the structured
+     * top-level columns and cookie-derived url_parameters.
+     *
+     * Forms can override `external_token` by including it in their payload —
+     * useful for legacy flows like the questionnaire that key off an HMAC
+     * token. By default the Lead ULID is sent.
      *
      * @return array<string, mixed>
      */
@@ -133,23 +144,30 @@ class Lead extends Model
         $urlParameters['facebook_fbp'] = $cookies['_fbp'] ?? ($urlParameters['facebook_fbp'] ?? '');
         $urlParameters['facebook_fbc'] = $cookies['_fbc'] ?? ($urlParameters['facebook_fbc'] ?? '');
 
-        return array_filter([
+        $structured = array_filter([
             'prospect_queue_id' => $this->prospect_queue_id,
             'office' => $this->office_id,
             'fname' => $this->fname,
             'lname' => $this->lname,
             'email' => $this->email,
             'contact' => $this->contact,
-            'message' => $payload['message'] ?? null,
-            'page_referrer' => $this->previous_url,
-            'contact_time' => $payload['contact_time'] ?? null,
             'town' => $this->town,
-            'occupation' => $payload['occupation'] ?? null,
+            'page_referrer' => $this->previous_url,
             'lead_source_id' => $this->lead_source_id,
             'location_header' => $this->country_code,
-            'url_parameters' => $urlParameters,
-            'attribution' => $attribution,
-            'external_token' => $this->id,
         ], static fn ($value) => $value !== null && $value !== '');
+
+        $rawPayload = $payload;
+        unset($rawPayload['url_parameters'], $rawPayload['external_token']);
+
+        return array_merge(
+            $rawPayload,
+            $structured,
+            [
+                'url_parameters' => $urlParameters,
+                'attribution' => $attribution,
+                'external_token' => $payload['external_token'] ?? $this->id,
+            ],
+        );
     }
 }

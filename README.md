@@ -28,7 +28,13 @@ Publish the config:
 php artisan vendor:publish --tag=leads-config
 ```
 
-Migrations are auto-loaded only when `LEADS_SCHEMA_OWNER=true`, so only one site in the fleet runs `php artisan migrate` against the shared database.
+Run the schema migration. Only the designated schema-owner site (`LEADS_SCHEMA_OWNER=true`) executes this — other sites in the fleet are blocked from running it. The command targets the `leads` connection so the migration record lands in the shared database itself:
+
+```bash
+php artisan leads:migrate            # run pending migrations
+php artisan leads:migrate --pretend  # show SQL without executing
+php artisan leads:migrate --rollback # roll back the last batch
+```
 
 ## Usage
 
@@ -71,6 +77,36 @@ $pipeline->update($lead, ['fname' => $this->name, 'email' => $this->email]);
 // ...later step...
 $pipeline->complete($lead, ['occupation' => $this->occupation]);
 ```
+
+## Delivery to Duo
+
+Two modes — pick one per site, both can coexist across the fleet:
+
+### Job mode (default — for sites with queue workers)
+
+`LEADS_AUTO_DISPATCH_JOB=true` (or unset). `LeadPipeline::complete()` dispatches `SendLeadToDuoJob` immediately. Horizon processes it. Lowest latency for live forms.
+
+### Command mode (for the leads-admin app or sites without queue workers)
+
+`LEADS_AUTO_DISPATCH_JOB=false`. `complete()` just writes the row as `pending` — no queue dispatch. A separate app (typically the leads-admin) runs:
+
+```bash
+php artisan leads:dispatch-pending          # processes all sites
+php artisan leads:dispatch-pending --site=elect-club --limit=20
+php artisan leads:dispatch-pending --dry-run
+```
+
+Schedule both delivery commands on a per-minute cron:
+
+```php
+// In the leads-admin app's app/Console/Kernel.php
+$schedule->command('leads:dispatch-pending')->everyMinute()->withoutOverlapping();
+$schedule->command('leads:finalize-drafts')->everyMinute()->withoutOverlapping();
+```
+
+`leads:finalize-drafts` handles the multi-step timeout — drafts older than `LEADS_DRAFT_TIMEOUT` (default 600s) are completed automatically so abandoned PaidSearchForm submissions still reach Duo. With `LEADS_AUTO_DISPATCH_JOB=false` on the frontend sites, **no queue workers are needed anywhere except possibly the admin app**.
+
+Both modes use the same `LeadDispatcher` service. Backoff (`leads.dispatch.backoff`) and max attempts (`leads.dispatch.max_attempts`) apply identically. Atomic claim (`UPDATE ... WHERE status='pending'`) means a lead is never sent twice even if both a queue worker and the cron tried to grab it.
 
 ## Ops
 

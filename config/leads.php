@@ -53,6 +53,35 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Dispatch behaviour
+    |--------------------------------------------------------------------------
+    |
+    | auto_dispatch_job: when true (the default), LeadPipeline::complete()
+    |   dispatches SendLeadToDuoJob immediately. Sites with queue workers
+    |   keep this on for low-latency delivery.
+    |
+    |   When false, the lead is written to the shared database as `pending`
+    |   and nothing else happens — a separate leads-admin app picks it up
+    |   via the `leads:dispatch-pending` artisan command on a cron schedule.
+    |   Frontend sites can use this mode to avoid running queue workers at all.
+    |
+    | max_attempts: hard ceiling on dispatch retries before the lead is
+    |   marked failed and removed from the auto-retry pool.
+    |
+    | backoff: seconds between attempts. Used by both the queue job (Laravel
+    |   reads it for delay-based retries) and the scheduled command (which
+    |   skips leads whose backoff window has not yet elapsed).
+    |
+    */
+
+    'dispatch' => [
+        'auto_dispatch_job' => (bool) env('LEADS_AUTO_DISPATCH_JOB', true),
+        'max_attempts' => (int) env('LEADS_MAX_ATTEMPTS', 5),
+        'backoff' => [30, 120, 600, 3600, 21600],
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
     | Defaults
     |--------------------------------------------------------------------------
     |
@@ -65,6 +94,21 @@ return [
         'prospect_queue_id' => env('LEADS_PROSPECT_QUEUE_ID', 5),
         'office_id' => env('LEADS_OFFICE_ID', 21),
     ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | Draft completion timeout
+    |--------------------------------------------------------------------------
+    |
+    | For multi-step flows where a form schedules its completion (e.g. the
+    | PaidSearchForm waits for the user to finish a thank-you-page
+    | questionnaire), this is how long we wait before finalising the lead
+    | with whatever data we have. Once this elapses, FinalizeLeadJob fires
+    | and completes the lead so the basic contact info still reaches Duo.
+    |
+    */
+
+    'draft_timeout_seconds' => (int) env('LEADS_DRAFT_TIMEOUT', 600),
 
     /*
     |--------------------------------------------------------------------------
