@@ -4,6 +4,18 @@ All notable changes will be documented here.
 
 ## [Unreleased]
 
+## [0.1.2] - 2026-05-19
+
+### Fixed
+- `FinalizeLeadJob` no longer finalises a draft lead before the configured `draft_timeout_seconds` has elapsed. On a `sync` queue driver, Laravel ignores `dispatch()->delay()` and runs jobs immediately — the previous behaviour was to complete the draft straight away on dispatch, defeating the multi-step pattern. The job now re-checks elapsed time and no-ops if the timeout has not yet passed; on async queues the behaviour is unchanged because the job arrives after the delay. On sync queues the draft is finalised later by `leads:finalize-drafts` (or by the follow-on form completing it).
+
+## [0.1.1] - 2026-05-19
+
+### Changed
+- Widened `illuminate/*` version constraints to `^11.0||^12.0||^13.0` so the package installs on Laravel 13 hosts.
+
+## [0.1.0] - 2026-05-19
+
 ### Added
 - Initial release. Lead model + pipeline, SendLeadToDuoJob, SendLeadToFacebookJob, ResendFailedLeadsCommand, CaptureAttribution middleware. Shared-DB schema with `site` column and global SiteScope.
 - `leads:migrate` artisan command: schema-owner-gated wrapper that runs the package's migrations against the `leads` connection so the migration record lives in the shared database alongside the table.

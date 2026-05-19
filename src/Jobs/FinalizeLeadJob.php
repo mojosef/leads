@@ -28,6 +28,12 @@ class FinalizeLeadJob implements ShouldQueue
      * (questionnaire etc.) in time, the lead will already have transitioned
      * out of draft and this job no-ops. Otherwise we complete the lead with
      * whatever data we have, so the user's contact info still reaches Duo.
+     *
+     * Belt-and-braces: on a `sync` queue driver, `dispatch()->delay()` is
+     * ignored and this job runs immediately. We re-check the elapsed time
+     * before completing so the timeout is respected regardless of driver.
+     * On sync queue the job no-ops; the lead is finalised later by
+     * `leads:finalize-drafts` (or by the follow-on form completing it).
      */
     public function handle(LeadPipeline $pipeline): void
     {
@@ -39,6 +45,13 @@ class FinalizeLeadJob implements ShouldQueue
         }
 
         if ($lead->status !== Lead::STATUS_DRAFT) {
+            return;
+        }
+
+        $timeoutSeconds = (int) config('leads.draft_timeout_seconds', 600);
+        $earliestFinalize = $lead->created_at?->copy()->addSeconds($timeoutSeconds);
+
+        if ($earliestFinalize && $earliestFinalize->isFuture()) {
             return;
         }
 
