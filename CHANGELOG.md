@@ -4,8 +4,16 @@ All notable changes will be documented here.
 
 ## [Unreleased]
 
+## [0.1.5] - 2026-05-26
+
 ### Added
 - Facebook CAPI phone numbers are normalized to E.164 before the SDK hashes them, improving Meta match quality. A bare UK `07123456789` previously hashed to a different value than Meta's stored `447123456789` and silently failed to match. `FacebookLeadService::normalizePhone()` uses the lead's Cloudflare `country_code` as the region hint (falling back to GB), validates, and formats to E.164; unparseable or invalid numbers pass through unchanged. Backed by the new `giggsey/libphonenumber-for-php-lite` dependency (core parse/validate/format metadata only — no geocoder/carrier/timezone data).
+- README: **Browser pixel deduplication** section documenting the server/browser dedup contract (`event_name = Lead`, `eventID = fb_event_id`) and the thank-you-page `fbq` snippet, so consuming sites can match the CAPI event the package fires.
+
+## [0.1.4] - 2026-05-26
+
+### Added
+- `CaptureAttribution` now stores any non-standard query-string param (one that isn't a known UTM tag or click ID) under a nested `attribution.query` key — e.g. a `variants` param carrying template data. Kept separate so user-supplied params can't clobber reserved top-level keys, and capped (25 params, 500 chars each) to keep the session and lead row from bloating.
 
 ## [0.1.3] - 2026-05-26
 
