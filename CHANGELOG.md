@@ -4,6 +4,9 @@ All notable changes will be documented here.
 
 ## [Unreleased]
 
+### Added
+- Facebook CAPI phone numbers are normalized to E.164 before the SDK hashes them, improving Meta match quality. A bare UK `07123456789` previously hashed to a different value than Meta's stored `447123456789` and silently failed to match. `FacebookLeadService::normalizePhone()` uses the lead's Cloudflare `country_code` as the region hint (falling back to GB), validates, and formats to E.164; unparseable or invalid numbers pass through unchanged. Backed by the new `giggsey/libphonenumber-for-php-lite` dependency (core parse/validate/format metadata only — no geocoder/carrier/timezone data).
+
 ## [0.1.3] - 2026-05-26
 
 ### Changed

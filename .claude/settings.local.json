@@ -3,7 +3,12 @@
     "allow": [
       "Bash(git rm *)",
       "Bash(git ls-remote *)",
-      "Bash(composer show *)"
+      "Bash(composer show *)",
+      "Bash(php *)",
+      "Bash(git add *)",
+      "Bash(git commit -m 'feat: capture non-standard query params under attribution.query *)",
+      "Bash(git tag *)",
+      "Bash(git push *)"
     ]
   }
 }

@@ -121,6 +121,28 @@ Pixel IDs are not secret — hardcode them. Access tokens are — `env()` them. 
 
 If no per-site entry exists, the service falls back to the global `conversions-api.*` config (used by single-tenant frontends until they're switched to admin-app delivery).
 
+### Browser pixel deduplication
+
+The package fires the **server-side** CAPI `Lead` event from `SendLeadToFacebookJob`. For it to deduplicate against the **browser** pixel `Lead` event — rather than Meta counting both and double-reporting the conversion — the frontend must fire its pixel with the *same* event id. That id is the Lead's `fb_event_id`, which the `complete()` example above flashes to the thank-you page:
+
+```blade
+{{-- Thank-you page. Only fire when the lead was Facebook-eligible. --}}
+@if (session('fb_lead'))
+    <script>
+        fbq('track', 'Lead', {}, { eventID: @json(session('fb_event_id')) });
+    </script>
+@endif
+```
+
+The contract the package guarantees on the server side, which the browser event must match for dedup to fire:
+
+| Field        | Value                                  |
+|--------------|----------------------------------------|
+| `event_name` | `Lead`                                 |
+| `eventID`    | the Lead's `fb_event_id` (a ULID)      |
+
+Firing the pixel itself — which pixel id, consent/CMP gating, server-rendered page vs. AJAX response — is the frontend's call; this package deliberately ships no JS. The only thing each site must ensure is that `fb_event_id` survives from the submission request to wherever the pixel fires (flash, redirect, or the JSON response body all work). Phone numbers, emails, and names are normalized and hashed server-side by the CAPI SDK — never send hashed values from the browser.
+
 ### Cron schedule
 
 Schedule both delivery commands on a per-minute cron:

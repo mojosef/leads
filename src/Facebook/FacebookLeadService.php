@@ -8,6 +8,9 @@ use FacebookAds\Object\ServerSide\Event;
 use FacebookAds\Object\ServerSide\EventRequest;
 use FacebookAds\Object\ServerSide\UserData;
 use Illuminate\Support\Facades\Log;
+use libphonenumber\NumberParseException;
+use libphonenumber\PhoneNumberFormat;
+use libphonenumber\PhoneNumberUtil;
 use RuntimeException;
 use Throwable;
 
@@ -141,7 +144,7 @@ class FacebookLeadService
             $data->setEmail($lead->email);
         }
         if ($lead->contact) {
-            $data->setPhone($lead->contact);
+            $data->setPhone($this->normalizePhone((string) $lead->contact, $lead->country_code));
         }
         if ($first !== '') {
             $data->setFirstName($first);
@@ -163,6 +166,36 @@ class FacebookLeadService
         }
 
         return $data;
+    }
+
+    /**
+     * Normalize a phone number to E.164 so Meta can match it against its own
+     * country-code-prefixed records. A bare UK "07123456789" hashes to a
+     * different value than Meta's "447123456789" and silently fails to match;
+     * the FB SDK only strips symbols, it never adds the dialing code.
+     *
+     * The Lead's Cloudflare country_code is the region hint, falling back to
+     * GB (the fleet is UK-centric). Numbers already in international form
+     * (+44…) parse correctly regardless of the hint. If the number can't be
+     * parsed or isn't valid, we return it unchanged so the SDK still sends a
+     * best-effort value rather than dropping the phone signal entirely.
+     */
+    private function normalizePhone(string $phone, ?string $countryCode): string
+    {
+        $region = strtoupper($countryCode ?: 'GB');
+
+        try {
+            $util = PhoneNumberUtil::getInstance();
+            $parsed = $util->parse($phone, $region);
+
+            if ($util->isValidNumber($parsed)) {
+                return $util->format($parsed, PhoneNumberFormat::E164);
+            }
+        } catch (NumberParseException) {
+            // Unparseable input — fall through to the raw value.
+        }
+
+        return $phone;
     }
 
     /**
