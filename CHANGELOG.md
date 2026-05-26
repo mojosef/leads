@@ -4,6 +4,16 @@ All notable changes will be documented here.
 
 ## [Unreleased]
 
+## [0.1.3] - 2026-05-26
+
+### Changed
+- **BREAKING** (small surface area): `LeadPipeline::appendQuestionnaire(Lead, array)` replaced with generic `LeadPipeline::append(Lead, string $section, array $data)`. Any follow-on component can now contribute data to a draft lead under its own named section — not just a hard-coded questionnaire path. Idempotency is per-section via `payload[$section.'_completed_at']`. Consuming code: `appendQuestionnaire($lead, $answers)` → `append($lead, 'questionnaire', $answers)`.
+- `Lead::isQuestionnaireCompleted()` replaced with the generic `Lead::hasCompletedSection(string $section): bool`.
+- `append()` no longer auto-completes a draft lead and no longer dispatches an append job. The lead stays as `draft` until either an explicit `complete()` call or the timeout fires. Completion is now uniformly timeout-driven, so Duo always receives the lead as a single `/lead/create` with the full accumulated payload — there's no longer a code path where the user finishes a follow-on form and Duo gets an immediate create.
+
+### Removed
+- `AppendLeadToDuoJob` deleted. The system no longer calls Duo's `/lead/append` endpoint under any circumstance. Whatever data the draft accumulates before the timeout is the entirety of what Duo ever sees about the lead. This removes the "user submits follow-on form after timeout fired → /lead/append fallback" path that was previously a rare edge case.
+
 ## [0.1.2] - 2026-05-19
 
 ### Fixed

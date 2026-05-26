@@ -114,9 +114,9 @@ class Lead extends Model
         ])->save();
     }
 
-    public function isQuestionnaireCompleted(): bool
+    public function hasCompletedSection(string $section): bool
     {
-        return ! empty(($this->payload ?? [])['questionnaire_completed_at']);
+        return ! empty(($this->payload ?? [])[$section.'_completed_at']);
     }
 
     /**

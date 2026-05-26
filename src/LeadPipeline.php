@@ -3,11 +3,11 @@
 namespace mojosef\Leads;
 
 use mojosef\Leads\Exceptions\LeadStateException;
-use mojosef\Leads\Jobs\AppendLeadToDuoJob;
 use mojosef\Leads\Jobs\FinalizeLeadJob;
 use mojosef\Leads\Jobs\SendLeadToDuoJob;
 use mojosef\Leads\Models\Lead;
 use Illuminate\Support\Arr;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 
 class LeadPipeline
@@ -194,40 +194,47 @@ class LeadPipeline
     }
 
     /**
-     * Add questionnaire answers to a lead. Behaviour depends on lead state:
+     * Merge an arbitrary block of data into a draft lead's payload under a
+     * named section. Designed for multi-step flows where any number of
+     * follow-on components (questionnaire, lifestyle survey, preferences,
+     * etc.) contribute data to a single lead.
      *
-     * - DRAFT (the user finished the questionnaire before the finalize
-     *   timeout fired): merge the answers into the payload and complete the
-     *   lead. Duo receives a single /lead/create with the full data set.
+     * Does NOT auto-complete the lead. The lead stays as `draft` until either
+     * the explicit `complete()` call or the timeout fires (`FinalizeLeadJob`
+     * / `leads:finalize-drafts`). Duo only ever receives the lead as a single
+     * /lead/create with the full accumulated payload — there is no
+     * /lead/append concept in this system.
      *
-     * - SENT or PENDING (the user took longer than the timeout, so the lead
-     *   has already been dispatched to Duo): write the answers locally for
-     *   the audit trail and dispatch an AppendLeadToDuoJob so Duo's record
-     *   gets enriched via /lead/append.
+     * Idempotent per section: once `payload[$section.'_completed_at']` is
+     * set, subsequent calls with the same section are no-ops.
      *
-     * Idempotent — re-submitting once questionnaire_completed_at is set is
-     * a no-op.
+     * Non-draft leads are silently ignored (with a log warning). By the time
+     * a lead has moved past draft, the timeout has fired and Duo has been
+     * called — additional submissions can't be incorporated.
      *
-     * @param  array<int|string, mixed>  $answers
+     * @param  array<int|string, mixed>  $data
      */
-    public function appendQuestionnaire(Lead $lead, array $answers): Lead
+    public function append(Lead $lead, string $section, array $data): Lead
     {
-        if ($lead->isQuestionnaireCompleted()) {
+        if ($lead->hasCompletedSection($section)) {
+            return $lead;
+        }
+
+        if ($lead->status !== Lead::STATUS_DRAFT) {
+            Log::warning('LeadPipeline::append called on non-draft lead — ignoring', [
+                'lead_id' => $lead->id,
+                'status' => $lead->status,
+                'section' => $section,
+            ]);
             return $lead;
         }
 
         $lead->forceFill([
             'payload' => array_replace((array) $lead->payload, [
-                'questionnaire' => $answers,
-                'questionnaire_completed_at' => now()->toIso8601String(),
+                $section => $data,
+                $section.'_completed_at' => now()->toIso8601String(),
             ]),
         ])->save();
-
-        if ($lead->status === Lead::STATUS_DRAFT) {
-            return $this->complete($lead->fresh());
-        }
-
-        AppendLeadToDuoJob::dispatch($lead->id)->delay(now()->addMinutes(5));
 
         return $lead;
     }
