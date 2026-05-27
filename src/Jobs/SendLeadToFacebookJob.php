@@ -22,7 +22,16 @@ class SendLeadToFacebookJob implements ShouldQueue
     public int $tries = 3;
     public int $timeout = 30;
 
-    public function __construct(public readonly string $leadId) {}
+    public function __construct(public readonly string $leadId)
+    {
+        if ($connection = config('leads.queue.connection')) {
+            $this->onConnection($connection);
+        }
+
+        if ($queue = config('leads.queue.name')) {
+            $this->onQueue($queue);
+        }
+    }
 
     /**
      * @return array<int>

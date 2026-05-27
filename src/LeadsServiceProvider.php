@@ -30,6 +30,73 @@ class LeadsServiceProvider extends PackageServiceProvider
         $this->app->singleton(Facebook\FacebookLeadService::class);
         $this->app->singleton(LeadDispatcher::class);
         $this->app->singleton(LeadPipeline::class);
+
+        $this->registerSharedConnections();
+    }
+
+    /**
+     * Register the fleet-shared connections (MySQL, Redis, queue) so every
+     * site picks them up from env alone — no per-site config edits. Each
+     * registration is guarded: if the host app already defines the same key,
+     * that wins, so existing sites and bespoke overrides remain unaffected.
+     *
+     * The explicit Redis prefix overrides the per-site APP_NAME-derived
+     * default so jobs from all sites land in the same Redis keyspace, where
+     * the admin app's worker drains them.
+     */
+    private function registerSharedConnections(): void
+    {
+        $config = $this->app['config'];
+
+        if (! $config->has('database.connections.leads')) {
+            $config->set('database.connections.leads', [
+                'driver' => 'mysql',
+                'host' => env('LEADS_DB_HOST', '127.0.0.1'),
+                'port' => env('LEADS_DB_PORT', '3306'),
+                'database' => env('LEADS_DB_DATABASE', 'leads_shared'),
+                'username' => env('LEADS_DB_USERNAME', env('DB_USERNAME', 'forge')),
+                'password' => env('LEADS_DB_PASSWORD', env('DB_PASSWORD', '')),
+                'unix_socket' => env('LEADS_DB_SOCKET', env('DB_SOCKET', '')),
+                'charset' => 'utf8mb4',
+                'collation' => 'utf8mb4_unicode_ci',
+                'prefix' => '',
+                'prefix_indexes' => true,
+                'strict' => true,
+                'engine' => null,
+            ]);
+        }
+
+        if (! $config->has('database.connections.leads_testing')) {
+            $config->set('database.connections.leads_testing', [
+                'driver' => 'sqlite',
+                'database' => ':memory:',
+                'prefix' => '',
+                'foreign_key_constraints' => true,
+            ]);
+        }
+
+        if (! $config->has('database.redis.leads')) {
+            $config->set('database.redis.leads', [
+                'url' => env('LEADS_REDIS_URL'),
+                'host' => env('LEADS_REDIS_HOST', env('REDIS_HOST', '127.0.0.1')),
+                'password' => env('LEADS_REDIS_PASSWORD', env('REDIS_PASSWORD')),
+                'port' => env('LEADS_REDIS_PORT', env('REDIS_PORT', '6379')),
+                'database' => env('LEADS_REDIS_DB', '5'),
+                'options' => [
+                    'prefix' => env('LEADS_REDIS_PREFIX', 'fleet_leads_'),
+                ],
+            ]);
+        }
+
+        if (! $config->has('queue.connections.leads')) {
+            $config->set('queue.connections.leads', [
+                'driver' => 'redis',
+                'connection' => 'leads',
+                'queue' => env('LEADS_QUEUE_NAME', 'leads'),
+                'retry_after' => 90,
+                'block_for' => null,
+            ]);
+        }
     }
 
     public function packageBooted(): void
