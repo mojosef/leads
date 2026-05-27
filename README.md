@@ -8,19 +8,49 @@ Durable, queue-backed lead pipeline shared across the Duo CRM site fleet. Every 
 composer require mojosef/leads
 ```
 
-Add a `leads` connection to `config/database.php` and the following env keys to each consuming site:
+The service provider auto-registers the shared `leads` database, Redis, and queue connections from the env keys below — no `config/database.php` or `config/queue.php` edits are needed. Each registration is guarded: if the host app already defines a connection of the same name, that one wins.
+
+Add the following env keys to each consuming site. Only `LEADS_SITE` is required; every other key has the default shown, and the fleet-shared values are what you'll typically set:
 
 ```
-LEADS_SITE=elect-club
-LEADS_SCHEMA_OWNER=false   # true on exactly one site in the fleet
+# Identity
+LEADS_SITE=elect-club            # required — stamped on every lead row, scopes reads to this site
+LEADS_SCHEMA_OWNER=false         # true on exactly one site in the fleet
 
-LEADS_DB_CONNECTION=leads
+# Shared leads database (registered as the `leads` connection)
+LEADS_DB_CONNECTION=leads        # connection name the model + migrations use
+LEADS_DB_HOST=127.0.0.1
+LEADS_DB_PORT=3306
+LEADS_DB_DATABASE=leads_shared
+LEADS_DB_USERNAME=forge          # falls back to DB_USERNAME
+LEADS_DB_PASSWORD=               # falls back to DB_PASSWORD
+LEADS_DB_SOCKET=                 # falls back to DB_SOCKET
+
+# Shared Redis (registered as the `leads` redis connection)
+LEADS_REDIS_URL=
+LEADS_REDIS_HOST=127.0.0.1       # falls back to REDIS_HOST
+LEADS_REDIS_PASSWORD=            # falls back to REDIS_PASSWORD
+LEADS_REDIS_PORT=6379            # falls back to REDIS_PORT
+LEADS_REDIS_DB=5
+LEADS_REDIS_PREFIX=fleet_leads_  # all sites share one keyspace — keep identical across the fleet
+
+# Queue (registered as the `leads` queue connection)
+LEADS_QUEUE_CONNECTION=leads     # connection package jobs route onto; unset = host's default queue
+LEADS_QUEUE_NAME=leads           # queue name within that connection; workers must include it in --queue=
+
+# Duo CRM
 LEADS_DUO_URL=https://myduo.app/v1/lead/create
 
-LEADS_PROSPECT_QUEUE_ID=5
+# Dispatch behaviour (see "Delivery to Duo" below)
+LEADS_AUTO_DISPATCH_JOB=true     # false = leave leads pending for the admin app's cron
+LEADS_MAX_ATTEMPTS=5
+LEADS_DRAFT_TIMEOUT=600          # seconds before a multi-step draft is auto-finalised
+
+# Per-site Duo defaults
 LEADS_OFFICE_ID=21
-LEADS_FB_SOURCE_IDS=59
 ```
+
+Facebook CAPI access tokens (`FB_*_TOKEN`, and `FB_*_TEST_CODE` for staging) are only needed on the app that delivers to Facebook — typically the admin app. See [Facebook CAPI credentials](#facebook-capi-credentials-admin-app) below.
 
 Publish the config:
 
@@ -48,7 +78,7 @@ class PpcContactForm extends Component
         $this->validate();
 
         $lead = $pipeline->start('ppc_contact', [
-            'lead_source_id' => $this->lead_source_id,
+            'office_id' => 17, // optional — overrides the per-form / global default
         ]);
 
         $lead = $pipeline->complete($lead, [
