@@ -41,7 +41,7 @@ class LeadPipeline
             'attribution' => $snapshot['attribution'],
             'cookies' => $snapshot['cookies'],
             'fb_event_id' => (string) Str::ulid(),
-            'fb_eligible' => $this->computeFacebookEligibility($formKey, $snapshot['cookies']),
+            'fb_eligible' => $this->hasFacebookClick($snapshot['cookies']),
             'ip_address' => $snapshot['ip_address'],
             'user_agent' => $snapshot['user_agent'],
             'previous_url' => $snapshot['previous_url'],
@@ -244,12 +244,17 @@ class LeadPipeline
         return "leads.draft.$formKey";
     }
 
-    private function computeFacebookEligibility(string $formKey, array $cookies): bool
+    /**
+     * A lead is Facebook-eligible when it carries Facebook click attribution —
+     * an fbclid, or the _fbc cookie derived from one. Computed once here and
+     * frozen onto the row, so the admin app that later sends the CAPI event
+     * reads a fixed value rather than re-deriving it from config that may
+     * differ between the frontend and admin apps.
+     *
+     * @param  array<string, mixed>  $cookies
+     */
+    private function hasFacebookClick(array $cookies): bool
     {
-        if (! empty($cookies['fbclid'])) {
-            return true;
-        }
-
-        return (bool) config("leads.forms.$formKey.fb_eligible", false);
+        return ! empty($cookies['fbclid']) || ! empty($cookies['_fbc']);
     }
 }

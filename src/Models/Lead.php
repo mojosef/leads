@@ -56,17 +56,14 @@ class Lead extends Model
         return $query->where('status', self::STATUS_PENDING);
     }
 
+    /**
+     * Whether this lead should fire a Facebook 'Lead' event (browser pixel and
+     * server CAPI). True only when the lead carried Facebook click attribution
+     * at creation; the value is frozen on the row so every app agrees.
+     */
     public function isFacebookEligible(): bool
     {
-        if ($this->fb_eligible) {
-            return true;
-        }
-
-        if (! empty(($this->cookies ?? [])['fbclid'] ?? null)) {
-            return true;
-        }
-
-        return (bool) config("leads.forms.{$this->form_key}.fb_eligible", false);
+        return (bool) $this->fb_eligible;
     }
 
     public function markSending(): void

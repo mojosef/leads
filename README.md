@@ -153,7 +153,9 @@ If no per-site entry exists, the service falls back to the global `conversions-a
 
 ### Browser pixel deduplication
 
-The package fires the **server-side** CAPI `Lead` event from `SendLeadToFacebookJob`. For it to deduplicate against the **browser** pixel `Lead` event — rather than Meta counting both and double-reporting the conversion — the frontend must fire its pixel with the *same* event id. That id is the Lead's `fb_event_id`, which the `complete()` example above flashes to the thank-you page:
+The package fires the **server-side** CAPI `Lead` event from `SendLeadToFacebookJob`. For it to deduplicate against the **browser** pixel `Lead` event — rather than Meta counting both and double-reporting the conversion — the frontend must fire its pixel with the *same* event id. That id is the Lead's `fb_event_id`, which the `complete()` example above flashes to the thank-you page.
+
+A lead only fires the Facebook `Lead` event (browser pixel *and* server CAPI) when it is **Facebook-eligible** — i.e. it carried Facebook click attribution (an `fbclid`, or the `_fbc` cookie derived from one) at creation. Leads from Google, organic, or direct traffic send nothing to Meta. `isFacebookEligible()` reflects this; eligibility is decided once in `LeadPipeline::start()` and frozen onto the row, so the admin app sending the CAPI event and the frontend deciding whether to fire the pixel always agree — there is no per-form flag or cross-app config to keep in sync.
 
 ```blade
 {{-- Thank-you page. Only fire when the lead was Facebook-eligible. --}}

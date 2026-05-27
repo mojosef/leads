@@ -4,6 +4,9 @@ All notable changes will be documented here.
 
 ## [Unreleased]
 
+### Changed
+- Facebook eligibility is now driven solely by real Facebook click attribution. A lead fires the `Lead` event (browser pixel and server CAPI) only when it carried an `fbclid` (or the derived `_fbc` cookie) at creation; the decision is computed once in `LeadPipeline::start()` and frozen onto the `fb_eligible` column. Removed the per-form `leads.forms.*.fb_eligible` config flag and the config fallback in `Lead::isFacebookEligible()`, which had to be kept in sync between the frontend and admin apps and silently reported Google/organic/direct leads to Meta on mixed-channel landing pages. **Behaviour change:** forms previously relying on `fb_eligible => true` (e.g. `paid_search`, `ppc_contact`) no longer fire Facebook events for non-Facebook traffic. The `forms` config block remains for per-form `office_id` overrides.
+
 ## [0.1.5] - 2026-05-26
 
 ### Added

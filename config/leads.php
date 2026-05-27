@@ -171,26 +171,22 @@ return [
     | Per-form-key configuration
     |--------------------------------------------------------------------------
     |
-    | fb_eligible — when true, every lead from this form fires a Facebook
-    |   CAPI 'Lead' event regardless of whether an fbclid was captured.
-    |   Use it for forms that live exclusively on Facebook ad landing pages
-    |   where the click ID is reliable enough you want CAPI even when the
-    |   cookie is lost in transit (mobile redirects, consent gates).
-    |
     | office_id — override the default Duo office routing for this form.
+    |
+    | Facebook eligibility is NOT configured here. A lead fires the Facebook
+    | 'Lead' event only when it carried real Facebook click attribution
+    | (fbclid / _fbc) at creation — decided in LeadPipeline and frozen on the
+    | row, so no per-form flag and no frontend/admin config to keep in sync.
     |
     | Example:
     |   'forms' => [
-    |       'ppc_contact'  => ['fb_eligible' => true],
-    |       'paid_search'  => ['fb_eligible' => true],
-    |       'membership'   => ['office_id' => 17],
+    |       'membership' => ['office_id' => 17],
     |   ],
     |
     */
 
     'forms' => [
-        'ppc_contact' => ['fb_eligible' => true],
-        'paid_search' => ['fb_eligible' => true],
+        //
     ],
 
 ];
