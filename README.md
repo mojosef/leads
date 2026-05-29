@@ -1,6 +1,6 @@
 # mojosef/leads
 
-Durable, queue-backed lead pipeline shared across the Duo CRM site fleet. Every lead is persisted to a row in the shared `leads` database before any outbound HTTP, so a Duo or Facebook outage no longer loses revenue. Multi-step forms become a side-effect of having a draft row to update.
+Durable lead pipeline shared across the Duo CRM site fleet. Every lead is persisted to a row in the shared `leads` database before any outbound HTTP, so a Duo or Facebook outage no longer loses revenue. Delivery to both Duo and Facebook is driven by the admin app's crons sweeping the table — no queues, no workers. Multi-step forms become a side-effect of having a draft row to update.
 
 ## Installation
 
@@ -8,7 +8,7 @@ Durable, queue-backed lead pipeline shared across the Duo CRM site fleet. Every 
 composer require mojosef/leads
 ```
 
-The service provider auto-registers the shared `leads` database, Redis, and queue connections from the env keys below — no `config/database.php` or `config/queue.php` edits are needed. Each registration is guarded: if the host app already defines a connection of the same name, that one wins.
+The service provider auto-registers the shared `leads` database connection from the env keys below — no `config/database.php` edits are needed. The registration is guarded: if the host app already defines a connection of the same name, that one wins. The package queues nothing, so no Redis or queue connection is registered.
 
 Add the following env keys to each consuming site. Only `LEADS_SITE` is required; every other key has the default shown, and the fleet-shared values are what you'll typically set:
 
@@ -25,18 +25,6 @@ LEADS_DB_DATABASE=leads_shared
 LEADS_DB_USERNAME=forge          # falls back to DB_USERNAME
 LEADS_DB_PASSWORD=               # falls back to DB_PASSWORD
 LEADS_DB_SOCKET=                 # falls back to DB_SOCKET
-
-# Shared Redis (registered as the `leads` redis connection)
-LEADS_REDIS_URL=
-LEADS_REDIS_HOST=127.0.0.1       # falls back to REDIS_HOST
-LEADS_REDIS_PASSWORD=            # falls back to REDIS_PASSWORD
-LEADS_REDIS_PORT=6379            # falls back to REDIS_PORT
-LEADS_REDIS_DB=5
-LEADS_REDIS_PREFIX=fleet_leads_  # all sites share one keyspace — keep identical across the fleet
-
-# Queue (registered as the `leads` queue connection)
-LEADS_QUEUE_CONNECTION=leads     # connection package jobs route onto; unset = host's default queue
-LEADS_QUEUE_NAME=leads           # queue name within that connection; workers must include it in --queue=
 
 # Duo CRM
 LEADS_DUO_URL=https://myduo.app/v1/lead/create
@@ -114,7 +102,7 @@ Frontend sites never deliver leads themselves. They only ever write rows to the 
 - `LeadPipeline::complete()` promotes the lead `draft → pending`.
 - Multi-step forms call `update()` / `append()` (and optionally `scheduleCompletion()`) and leave the lead as `draft`.
 
-A separate app — typically the leads-admin — owns delivery via two crons (see [Cron schedule](#cron-schedule)). This means no frontend site needs a queue worker for Duo delivery.
+A separate app — typically the leads-admin — owns delivery via three crons (see [Cron schedule](#cron-schedule)). Delivery to Duo and Facebook is entirely cron-driven, so no site in the fleet needs a queue worker.
 
 ```bash
 php artisan leads:dispatch-pending          # ship pending leads to Duo, all sites
@@ -149,7 +137,7 @@ If no per-site entry exists, the service falls back to the global `conversions-a
 
 ### Browser pixel deduplication
 
-The package fires the **server-side** CAPI `Lead` event from `SendLeadToFacebookJob`. For it to deduplicate against the **browser** pixel `Lead` event — rather than Meta counting both and double-reporting the conversion — the frontend must fire its pixel with the *same* event id. That id is the Lead's `fb_event_id`, which the `complete()` example above flashes to the thank-you page.
+The package fires the **server-side** CAPI `Lead` event from the admin app's `leads:dispatch-facebook` cron. For it to deduplicate against the **browser** pixel `Lead` event — rather than Meta counting both and double-reporting the conversion — the frontend must fire its pixel with the *same* event id. That id is the Lead's `fb_event_id`, which the `complete()` example above flashes to the thank-you page.
 
 A lead only fires the Facebook `Lead` event (browser pixel *and* server CAPI) when it is **Facebook-eligible** — i.e. it carried Facebook click attribution (an `fbclid`, or the `_fbc` cookie derived from one) at creation. Leads from Google, organic, or direct traffic send nothing to Meta. `isFacebookEligible()` reflects this; eligibility is decided once in `LeadPipeline::start()` and frozen onto the row, so the admin app sending the CAPI event and the frontend deciding whether to fire the pixel always agree — there is no per-form flag or cross-app config to keep in sync.
 
@@ -173,17 +161,20 @@ Firing the pixel itself — which pixel id, consent/CMP gating, server-rendered 
 
 ### Cron schedule
 
-Schedule both delivery commands on a per-minute cron:
+Schedule all three delivery commands on a per-minute cron:
 
 ```php
 // In the leads-admin app's app/Console/Kernel.php
 $schedule->command('leads:dispatch-pending')->everyMinute()->withoutOverlapping();
 $schedule->command('leads:finalize-drafts')->everyMinute()->withoutOverlapping();
+$schedule->command('leads:dispatch-facebook --since=7d')->everyMinute()->withoutOverlapping();
 ```
 
-`leads:finalize-drafts` handles the multi-step timeout — drafts older than `LEADS_DRAFT_TIMEOUT` (default 600s) are promoted to `pending` automatically so abandoned PaidSearchForm submissions still reach Duo. Because frontend sites never dispatch, **no queue workers are needed anywhere except the admin app** (which runs one worker for the Facebook CAPI job).
+`leads:finalize-drafts` handles the multi-step timeout — drafts older than `LEADS_DRAFT_TIMEOUT` (default 600s) are promoted to `pending` automatically so abandoned PaidSearchForm submissions still reach Duo.
 
-Both modes use the same `LeadDispatcher` service. Backoff (`leads.dispatch.backoff`) and max attempts (`leads.dispatch.max_attempts`) apply identically. Atomic claim (`UPDATE ... WHERE status='pending'`) means a lead is never sent twice even if both a queue worker and the cron tried to grab it.
+`leads:dispatch-facebook` sweeps leads that reached Duo (`status = sent`) and are Facebook-eligible but not yet synced, and fires the CAPI `Lead` event for each. Because it works off `fb_synced_at IS NULL` rather than a queue, a send that fails or is missed is simply retried on the next tick — there is no job to lose. The `--since=7d` bound keeps it from re-attempting leads that have aged past Meta's 7-day acceptance window; such leads fall out of the sweep instead of being retried forever.
+
+Because delivery is entirely cron-driven, **no queue workers are needed anywhere in the fleet.** Duo delivery uses the `LeadDispatcher` service with backoff (`leads.dispatch.backoff`) and max attempts (`leads.dispatch.max_attempts`); its atomic claim (`UPDATE ... WHERE status='pending'`) means a lead is never sent to Duo twice even if two crons overlap.
 
 ## Ops
 
@@ -195,13 +186,13 @@ php artisan leads:resend --site='*' --status=failed
 php artisan leads:resend --id=01HXYZ...
 ```
 
-Retry the Facebook CAPI event for eligible leads that never synced — i.e. leads sent to Duo with `fb_eligible = 1` but `fb_synced_at` still null (the `SendLeadToFacebookJob` was lost or exhausted its retries). Sends in-process so each attempt's result is printed:
+`leads:dispatch-facebook` is normally on the per-minute cron (above), but it's also the manual tool for backfills or targeted re-sends — it sweeps eligible leads sent to Duo (`fb_eligible = 1`) whose `fb_synced_at` is still null. Sends in-process so each attempt's result is printed:
 
 ```bash
-php artisan leads:resend-facebook --dry-run            # list candidates, all sites
-php artisan leads:resend-facebook --since=7d            # backfill the last week
-php artisan leads:resend-facebook --site=ec --limit=50
-php artisan leads:resend-facebook --id=01HXYZ...        # specific leads, ignores filters
+php artisan leads:dispatch-facebook --dry-run            # list candidates, all sites
+php artisan leads:dispatch-facebook --since=7d           # backfill the last week
+php artisan leads:dispatch-facebook --site=ec --limit=50
+php artisan leads:dispatch-facebook --id=01HXYZ...       # specific leads, ignores filters
 ```
 
 Each lead reports `sent` (with the CAPI `events_received` / `fbtrace`), `skipped` (no credentials for the site — left retryable), or `failed` (the error is printed and written to the lead's `fb_response` without marking it synced, so the next run picks it up again). Note: Meta rejects `Lead` events older than 7 days, so scope backfills with `--since`.

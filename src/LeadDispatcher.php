@@ -2,7 +2,6 @@
 
 namespace mojosef\Leads;
 
-use mojosef\Leads\Jobs\SendLeadToFacebookJob;
 use mojosef\Leads\Models\Lead;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
@@ -10,10 +9,10 @@ use RuntimeException;
 use Throwable;
 
 /**
- * Single owner of the "send this lead to Duo" responsibility. Both the queue
- * job (immediate dispatch from frontend sites) and the scheduled command
- * (batch processing from the admin app) call this service so the behaviour
- * is identical regardless of context.
+ * Single owner of the "send this lead to Duo" responsibility. The admin app's
+ * `leads:dispatch-pending` cron and the `leads:resend` command both call this
+ * service so the behaviour is identical regardless of context. Facebook
+ * delivery is separate — handled by the `leads:dispatch-facebook` cron.
  *
  * The dispatcher is also responsible for the soft-retry semantics needed
  * by the command path: on failure, it transitions the lead back to pending
@@ -50,10 +49,6 @@ class LeadDispatcher
 
             $body = $this->decodeBody($response->body());
             $lead->markSent($response->status(), $body);
-
-            if ($lead->isFacebookEligible()) {
-                SendLeadToFacebookJob::dispatch($lead->id);
-            }
 
             return true;
         } catch (Throwable $e) {

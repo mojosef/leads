@@ -9,27 +9,27 @@ use Illuminate\Support\Carbon;
 use Throwable;
 
 /**
- * Retries the Facebook CAPI 'Lead' event for leads that should have fired one
- * but never did. The normal path dispatches SendLeadToFacebookJob after a lead
- * is sent to Duo; if the worker was down, the job was lost, or it exhausted its
- * retries, the lead is left fb_eligible with fb_synced_at still null and no
- * trace on the row. This command finds those and re-sends synchronously so the
- * operator sees the result of each attempt immediately.
+ * Sends the Facebook CAPI 'Lead' event for eligible leads that have reached Duo
+ * but not yet synced to Facebook. This is the sole delivery path for FB events:
+ * leads are swept by query (fb_eligible + sent + fb_synced_at null) rather than
+ * pushed onto a queue, so a missed send is simply retried on the next run — no
+ * queue worker to keep alive, and no silent job loss.
  *
- * Sends in-process rather than re-queuing so failures surface here instead of
- * silently in the worker log. Meta rejects Lead events older than 7 days, so
- * very old leads will fail — use --since to scope a backfill.
+ * Designed for the leads-admin app's per-minute cron, mirroring
+ * `leads:dispatch-pending`. Sends in-process so each attempt's result is
+ * visible when run by hand. Scope it with --since: Meta rejects Lead events
+ * older than 7 days, so leads that age out of the window stop being retried.
  */
-class ResendFacebookLeadsCommand extends Command
+class DispatchFacebookLeadsCommand extends Command
 {
-    protected $signature = 'leads:resend-facebook
-        {--id=* : Resend specific lead IDs (bypasses the eligibility/status filters)}
+    protected $signature = 'leads:dispatch-facebook
+        {--id=* : Send specific lead IDs (bypasses the eligibility/status filters)}
         {--site= : Restrict to a single site (defaults to all sites)}
         {--since= : Only consider leads created within this window (e.g. 24h, 7d). Meta rejects events older than 7 days.}
         {--limit=100 : Maximum leads to process in one run}
         {--dry-run : List candidate leads without sending}';
 
-    protected $description = 'Retry the Facebook CAPI Lead event for eligible leads that never synced.';
+    protected $description = 'Send the Facebook CAPI Lead event for eligible leads not yet synced. Designed for the leads-admin app cron.';
 
     public function handle(FacebookLeadService $facebook): int
     {

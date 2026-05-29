@@ -76,31 +76,6 @@ return [
 
     /*
     |--------------------------------------------------------------------------
-    | Queue routing
-    |--------------------------------------------------------------------------
-    |
-    | SendLeadToFacebookJob (dispatched by LeadDispatcher after a lead is sent
-    | to Duo) is routed onto this connection/queue at construction time. The
-    | shared fleet setup points every site at a single Redis connection drained
-    | by a single queue worker on the admin app, so the Facebook CAPI events
-    | for leads from all 6 sites go through one pipeline.
-    |
-    | connection: name of a queue connection defined in the host app's
-    |   config/queue.php. When null, the host's default queue connection is
-    |   used — useful for tests or sites that haven't been migrated yet.
-    |
-    | name: the queue name within that connection. Workers must include this
-    |   in --queue= to drain it.
-    |
-    */
-
-    'queue' => [
-        'connection' => env('LEADS_QUEUE_CONNECTION'),
-        'name' => env('LEADS_QUEUE_NAME', 'leads'),
-    ],
-
-    /*
-    |--------------------------------------------------------------------------
     | Defaults
     |--------------------------------------------------------------------------
     |

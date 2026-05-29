@@ -2,10 +2,10 @@
 
 namespace mojosef\Leads;
 
+use mojosef\Leads\Console\DispatchFacebookLeadsCommand;
 use mojosef\Leads\Console\DispatchPendingLeadsCommand;
 use mojosef\Leads\Console\FinalizeDraftsCommand;
 use mojosef\Leads\Console\MigrateCommand;
-use mojosef\Leads\Console\ResendFacebookLeadsCommand;
 use mojosef\Leads\Console\ResendFailedLeadsCommand;
 use mojosef\Leads\Http\Middleware\CaptureAttribution;
 use Illuminate\Routing\Router;
@@ -23,7 +23,7 @@ class LeadsServiceProvider extends PackageServiceProvider
             ->hasCommand(MigrateCommand::class)
             ->hasCommand(DispatchPendingLeadsCommand::class)
             ->hasCommand(FinalizeDraftsCommand::class)
-            ->hasCommand(ResendFacebookLeadsCommand::class);
+            ->hasCommand(DispatchFacebookLeadsCommand::class);
     }
 
     public function packageRegistered(): void
@@ -37,14 +37,14 @@ class LeadsServiceProvider extends PackageServiceProvider
     }
 
     /**
-     * Register the fleet-shared connections (MySQL, Redis, queue) so every
-     * site picks them up from env alone — no per-site config edits. Each
-     * registration is guarded: if the host app already defines the same key,
-     * that wins, so existing sites and bespoke overrides remain unaffected.
+     * Register the fleet-shared database connection so every site picks it up
+     * from env alone — no per-site config edits. Each registration is guarded:
+     * if the host app already defines the same key, that wins, so existing
+     * sites and bespoke overrides remain unaffected.
      *
-     * The explicit Redis prefix overrides the per-site APP_NAME-derived
-     * default so jobs from all sites land in the same Redis keyspace, where
-     * the admin app's worker drains them.
+     * The package no longer queues any jobs (Facebook events are delivered by
+     * the admin app's `leads:dispatch-facebook` cron, not a worker), so no
+     * Redis or queue connection is registered here.
      */
     private function registerSharedConnections(): void
     {
@@ -74,29 +74,6 @@ class LeadsServiceProvider extends PackageServiceProvider
                 'database' => ':memory:',
                 'prefix' => '',
                 'foreign_key_constraints' => true,
-            ]);
-        }
-
-        if (! $config->has('database.redis.leads')) {
-            $config->set('database.redis.leads', [
-                'url' => env('LEADS_REDIS_URL'),
-                'host' => env('LEADS_REDIS_HOST', env('REDIS_HOST', '127.0.0.1')),
-                'password' => env('LEADS_REDIS_PASSWORD', env('REDIS_PASSWORD')),
-                'port' => env('LEADS_REDIS_PORT', env('REDIS_PORT', '6379')),
-                'database' => env('LEADS_REDIS_DB', '5'),
-                'options' => [
-                    'prefix' => env('LEADS_REDIS_PREFIX', 'fleet_leads_'),
-                ],
-            ]);
-        }
-
-        if (! $config->has('queue.connections.leads')) {
-            $config->set('queue.connections.leads', [
-                'driver' => 'redis',
-                'connection' => 'leads',
-                'queue' => env('LEADS_QUEUE_NAME', 'leads'),
-                'retry_after' => 90,
-                'block_for' => null,
             ]);
         }
     }
