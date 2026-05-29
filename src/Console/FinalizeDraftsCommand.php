@@ -8,14 +8,13 @@ use Illuminate\Console\Command;
 use Throwable;
 
 /**
- * Finalizes draft leads whose multi-step timeout has elapsed. Designed for
- * the leads-admin app cron so frontend sites don't need a queue worker
- * just to fire FinalizeLeadJob.
+ * Finalizes draft leads whose multi-step timeout has elapsed. Runs on the
+ * leads-admin app cron and is the only thing that promotes an abandoned
+ * draft past `draft`.
  *
  * A draft is "expired" once `now() >= created_at + draft_timeout_seconds`.
  * The command transitions it to pending so the next `leads:dispatch-pending`
- * tick (or the immediate SendLeadToDuoJob, if auto_dispatch_job=true on the
- * admin app) ships it to Duo.
+ * tick ships it to Duo.
  */
 class FinalizeDraftsCommand extends Command
 {

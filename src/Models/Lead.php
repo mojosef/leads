@@ -111,6 +111,20 @@ class Lead extends Model
         ])->save();
     }
 
+    /**
+     * Record a failed CAPI attempt without setting fb_synced_at, so the lead
+     * stays in the resend pool and an operator can inspect why it failed.
+     */
+    public function markFbFailed(Throwable $e): void
+    {
+        $this->forceFill([
+            'fb_response' => [
+                'error' => mb_substr($e->getMessage(), 0, 5000),
+                'failed_at' => now()->toIso8601String(),
+            ],
+        ])->save();
+    }
+
     public function hasCompletedSection(string $section): bool
     {
         return ! empty(($this->payload ?? [])[$section.'_completed_at']);

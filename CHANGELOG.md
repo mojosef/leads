@@ -4,7 +4,15 @@ All notable changes will be documented here.
 
 ## [Unreleased]
 
+### Added
+- `leads:resend-facebook` command retries the Facebook CAPI `Lead` event for leads that should have fired one but never did — `fb_eligible` leads that reached Duo (`status = sent`) yet still have `fb_synced_at` null because `SendLeadToFacebookJob` was lost or exhausted its retries (which left no trace on the row). Sends in-process so each attempt prints its result (`sent` / `skipped` / `failed`); supports `--id`, `--site`, `--since`, `--limit`, `--dry-run`. Failures are written to `fb_response` without setting `fb_synced_at`, keeping the lead in the resend pool. Backed by a new `Lead::markFbFailed()` helper.
+
+### Removed
+- **BREAKING:** auto-dispatch removed. `SendLeadToDuoJob` and `FinalizeLeadJob` are deleted, along with the `LEADS_AUTO_DISPATCH_JOB` env / `leads.dispatch.auto_dispatch_job` config flag. Frontend sites no longer ship leads to Duo (or schedule their own finalisation) from the request cycle — delivery is now exclusively the leads-admin app's job. **Migration:** drop `LEADS_AUTO_DISPATCH_JOB` from every site's env, and ensure the admin app schedules **both** `leads:dispatch-pending` and `leads:finalize-drafts` on a per-minute cron. Sites that previously relied on `auto_dispatch_job=true` no longer need a Duo queue worker; the only queue worker still required is the admin app's, for `SendLeadToFacebookJob`.
+
 ### Changed
+- `LeadPipeline::complete()` now only promotes a lead `draft → pending` — it no longer dispatches `SendLeadToDuoJob`. The lead sits as `pending` until the admin app's `leads:dispatch-pending` cron ships it (typically within a minute). `resend()` likewise just resets the lead to `pending` for the cron to pick up.
+- `LeadPipeline::scheduleCompletion()` no longer dispatches a delayed `FinalizeLeadJob`; it only persists any supplied data and leaves the lead as `draft`. Abandoned multi-step drafts are now finalised solely by the admin app's `leads:finalize-drafts` cron once they exceed `draft_timeout_seconds`. The `$delaySeconds` argument is retained for call-site compatibility but is now ignored.
 - Facebook eligibility is now driven solely by real Facebook click attribution. A lead fires the `Lead` event (browser pixel and server CAPI) only when it carried an `fbclid` (or the derived `_fbc` cookie) at creation; the decision is computed once in `LeadPipeline::start()` and frozen onto the `fb_eligible` column. Removed the per-form `leads.forms.*.fb_eligible` config flag and the config fallback in `Lead::isFacebookEligible()`, which had to be kept in sync between the frontend and admin apps and silently reported Google/organic/direct leads to Meta on mixed-channel landing pages. **Behaviour change:** forms previously relying on `fb_eligible => true` (e.g. `paid_search`, `ppc_contact`) no longer fire Facebook events for non-Facebook traffic. The `forms` config block remains for per-form `office_id` overrides.
 
 ## [0.1.5] - 2026-05-26

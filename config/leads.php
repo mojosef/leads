@@ -56,26 +56,20 @@ return [
     | Dispatch behaviour
     |--------------------------------------------------------------------------
     |
-    | auto_dispatch_job: when true (the default), LeadPipeline::complete()
-    |   dispatches SendLeadToDuoJob immediately. Sites with queue workers
-    |   keep this on for low-latency delivery.
-    |
-    |   When false, the lead is written to the shared database as `pending`
-    |   and nothing else happens — a separate leads-admin app picks it up
-    |   via the `leads:dispatch-pending` artisan command on a cron schedule.
-    |   Frontend sites can use this mode to avoid running queue workers at all.
+    | Frontend sites never deliver leads themselves — LeadPipeline writes rows
+    | to the shared database and the leads-admin app's `leads:dispatch-pending`
+    | cron ships them to Duo. These settings tune that command's retry policy.
     |
     | max_attempts: hard ceiling on dispatch retries before the lead is
     |   marked failed and removed from the auto-retry pool.
     |
-    | backoff: seconds between attempts. Used by both the queue job (Laravel
-    |   reads it for delay-based retries) and the scheduled command (which
-    |   skips leads whose backoff window has not yet elapsed).
+    | backoff: seconds between attempts. The `leads:dispatch-pending` command
+    |   skips leads whose backoff window (indexed by attempt count) has not
+    |   yet elapsed.
     |
     */
 
     'dispatch' => [
-        'auto_dispatch_job' => (bool) env('LEADS_AUTO_DISPATCH_JOB', true),
         'max_attempts' => (int) env('LEADS_MAX_ATTEMPTS', 5),
         'backoff' => [30, 120, 600, 3600, 21600],
     ],
@@ -85,11 +79,11 @@ return [
     | Queue routing
     |--------------------------------------------------------------------------
     |
-    | Package jobs (SendLeadToDuoJob, SendLeadToFacebookJob, FinalizeLeadJob)
-    | are routed onto this connection/queue at construction time. The shared
-    | fleet setup points every site at a single Redis connection drained by
-    | a single queue worker on the admin app, so leads from all 6 sites go
-    | through one pipeline.
+    | SendLeadToFacebookJob (dispatched by LeadDispatcher after a lead is sent
+    | to Duo) is routed onto this connection/queue at construction time. The
+    | shared fleet setup points every site at a single Redis connection drained
+    | by a single queue worker on the admin app, so the Facebook CAPI events
+    | for leads from all 6 sites go through one pipeline.
     |
     | connection: name of a queue connection defined in the host app's
     |   config/queue.php. When null, the host's default queue connection is
@@ -127,8 +121,9 @@ return [
     | For multi-step flows where a form schedules its completion (e.g. the
     | PaidSearchForm waits for the user to finish a thank-you-page
     | questionnaire), this is how long we wait before finalising the lead
-    | with whatever data we have. Once this elapses, FinalizeLeadJob fires
-    | and completes the lead so the basic contact info still reaches Duo.
+    | with whatever data we have. Once a draft is older than this, the admin
+    | app's `leads:finalize-drafts` cron promotes it to pending so the basic
+    | contact info still reaches Duo.
     |
     */
 

@@ -42,9 +42,8 @@ LEADS_QUEUE_NAME=leads           # queue name within that connection; workers mu
 LEADS_DUO_URL=https://myduo.app/v1/lead/create
 
 # Dispatch behaviour (see "Delivery to Duo" below)
-LEADS_AUTO_DISPATCH_JOB=true     # false = leave leads pending for the admin app's cron
-LEADS_MAX_ATTEMPTS=5
-LEADS_DRAFT_TIMEOUT=600          # seconds before a multi-step draft is auto-finalised
+LEADS_MAX_ATTEMPTS=5             # dispatch retries before a lead is marked failed
+LEADS_DRAFT_TIMEOUT=600          # seconds before an abandoned draft is finalised by the admin cron
 
 # Per-site Duo defaults
 LEADS_OFFICE_ID=21
@@ -110,18 +109,15 @@ $pipeline->complete($lead, ['occupation' => $this->occupation]);
 
 ## Delivery to Duo
 
-Two modes — pick one per site, both can coexist across the fleet:
+Frontend sites never deliver leads themselves. They only ever write rows to the shared database:
 
-### Job mode (default — for sites with queue workers)
+- `LeadPipeline::complete()` promotes the lead `draft → pending`.
+- Multi-step forms call `update()` / `append()` (and optionally `scheduleCompletion()`) and leave the lead as `draft`.
 
-`LEADS_AUTO_DISPATCH_JOB=true` (or unset). `LeadPipeline::complete()` dispatches `SendLeadToDuoJob` immediately. Horizon processes it. Lowest latency for live forms.
-
-### Command mode (for the leads-admin app or sites without queue workers)
-
-`LEADS_AUTO_DISPATCH_JOB=false`. `complete()` just writes the row as `pending` — no queue dispatch. A separate app (typically the leads-admin) runs:
+A separate app — typically the leads-admin — owns delivery via two crons (see [Cron schedule](#cron-schedule)). This means no frontend site needs a queue worker for Duo delivery.
 
 ```bash
-php artisan leads:dispatch-pending          # processes all sites
+php artisan leads:dispatch-pending          # ship pending leads to Duo, all sites
 php artisan leads:dispatch-pending --site=elect-club --limit=20
 php artisan leads:dispatch-pending --dry-run
 ```
@@ -185,7 +181,7 @@ $schedule->command('leads:dispatch-pending')->everyMinute()->withoutOverlapping(
 $schedule->command('leads:finalize-drafts')->everyMinute()->withoutOverlapping();
 ```
 
-`leads:finalize-drafts` handles the multi-step timeout — drafts older than `LEADS_DRAFT_TIMEOUT` (default 600s) are completed automatically so abandoned PaidSearchForm submissions still reach Duo. With `LEADS_AUTO_DISPATCH_JOB=false` on the frontend sites, **no queue workers are needed anywhere except possibly the admin app**.
+`leads:finalize-drafts` handles the multi-step timeout — drafts older than `LEADS_DRAFT_TIMEOUT` (default 600s) are promoted to `pending` automatically so abandoned PaidSearchForm submissions still reach Duo. Because frontend sites never dispatch, **no queue workers are needed anywhere except the admin app** (which runs one worker for the Facebook CAPI job).
 
 Both modes use the same `LeadDispatcher` service. Backoff (`leads.dispatch.backoff`) and max attempts (`leads.dispatch.max_attempts`) apply identically. Atomic claim (`UPDATE ... WHERE status='pending'`) means a lead is never sent twice even if both a queue worker and the cron tried to grab it.
 
@@ -198,3 +194,14 @@ php artisan leads:resend --status=failed --since=24h --dry-run
 php artisan leads:resend --site='*' --status=failed
 php artisan leads:resend --id=01HXYZ...
 ```
+
+Retry the Facebook CAPI event for eligible leads that never synced — i.e. leads sent to Duo with `fb_eligible = 1` but `fb_synced_at` still null (the `SendLeadToFacebookJob` was lost or exhausted its retries). Sends in-process so each attempt's result is printed:
+
+```bash
+php artisan leads:resend-facebook --dry-run            # list candidates, all sites
+php artisan leads:resend-facebook --since=7d            # backfill the last week
+php artisan leads:resend-facebook --site=ec --limit=50
+php artisan leads:resend-facebook --id=01HXYZ...        # specific leads, ignores filters
+```
+
+Each lead reports `sent` (with the CAPI `events_received` / `fbtrace`), `skipped` (no credentials for the site — left retryable), or `failed` (the error is printed and written to the lead's `fb_response` without marking it synced, so the next run picks it up again). Note: Meta rejects `Lead` events older than 7 days, so scope backfills with `--since`.
