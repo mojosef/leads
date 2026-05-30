@@ -5,6 +5,7 @@ namespace mojosef\Leads;
 use mojosef\Leads\Console\DispatchFacebookLeadsCommand;
 use mojosef\Leads\Console\DispatchPendingLeadsCommand;
 use mojosef\Leads\Console\FinalizeDraftsCommand;
+use mojosef\Leads\Console\HealthCommand;
 use mojosef\Leads\Console\MigrateCommand;
 use mojosef\Leads\Console\ResendFailedLeadsCommand;
 use mojosef\Leads\Http\Middleware\CaptureAttribution;
@@ -23,7 +24,8 @@ class LeadsServiceProvider extends PackageServiceProvider
             ->hasCommand(MigrateCommand::class)
             ->hasCommand(DispatchPendingLeadsCommand::class)
             ->hasCommand(FinalizeDraftsCommand::class)
-            ->hasCommand(DispatchFacebookLeadsCommand::class);
+            ->hasCommand(DispatchFacebookLeadsCommand::class)
+            ->hasCommand(HealthCommand::class);
     }
 
     public function packageRegistered(): void

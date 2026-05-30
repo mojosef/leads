@@ -5,6 +5,7 @@ namespace mojosef\Leads\Console;
 use mojosef\Leads\Facebook\FacebookLeadService;
 use mojosef\Leads\Models\Lead;
 use Illuminate\Console\Command;
+use Carbon\CarbonInterface;
 use Illuminate\Support\Carbon;
 use Throwable;
 
@@ -120,7 +121,7 @@ class DispatchFacebookLeadsCommand extends Command
         return $failed > 0 ? self::FAILURE : self::SUCCESS;
     }
 
-    private function parseSince(string $value): ?Carbon
+    private function parseSince(string $value): ?CarbonInterface
     {
         if ($value === '' || $value === '0') {
             return null;

@@ -5,6 +5,7 @@ namespace mojosef\Leads\Console;
 use mojosef\Leads\LeadPipeline;
 use mojosef\Leads\Models\Lead;
 use Illuminate\Console\Command;
+use Carbon\CarbonInterface;
 use Illuminate\Support\Carbon;
 
 class ResendFailedLeadsCommand extends Command
@@ -66,7 +67,7 @@ class ResendFailedLeadsCommand extends Command
         return self::SUCCESS;
     }
 
-    private function parseSince(string $value): ?Carbon
+    private function parseSince(string $value): ?CarbonInterface
     {
         if ($value === '' || $value === '0') {
             return null;

@@ -176,6 +176,23 @@ $schedule->command('leads:dispatch-facebook --since=7d')->everyMinute()->without
 
 Because delivery is entirely cron-driven, **no queue workers are needed anywhere in the fleet.** Duo delivery uses the `LeadDispatcher` service with backoff (`leads.dispatch.backoff`) and max attempts (`leads.dispatch.max_attempts`); its atomic claim (`UPDATE ... WHERE status='pending'`) means a lead is never sent to Duo twice even if two crons overlap.
 
+### Monitoring
+
+Cron-driven delivery has one failure mode worth watching: if a cron stops, leads pile up silently in a transient state, and Facebook-eligible leads that sit unsynced for more than 7 days age out of the `dispatch-facebook` sweep permanently. `leads:health` is the smoke detector — schedule it and surface failures:
+
+```php
+$schedule->command('leads:health')->everyFifteenMinutes()->emailOutputOnFailure('ops@example.com');
+```
+
+It counts leads stuck in `draft` / `pending` / `sending`, and Facebook-eligible leads still unsynced, beyond `--warn-hours` (default 48). A running pipeline drives all of these to zero, so a non-zero count means a cron is behind — and the command **exits non-zero**, which is what `emailOutputOnFailure()` (or any external monitor checking the exit code) keys off. Terminal states (FB events past the 7-day window, Duo leads that exhausted their retries) are reported but don't trip the exit code, since they won't self-heal and would otherwise alarm forever.
+
+```bash
+php artisan leads:health                 # human-readable table, all sites
+php artisan leads:health --warn-hours=12 # tighter staleness window
+php artisan leads:health --site=ec
+php artisan leads:health --json          # for piping to a monitor (has an `alert` field)
+```
+
 ## Ops
 
 Re-dispatch failed leads:
