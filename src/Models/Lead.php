@@ -150,6 +150,7 @@ class Lead extends Model
 
         $urlParameters = $payload['url_parameters'] ?? [];
         $urlParameters['google_client_id'] = $cookies['_ga'] ?? ($urlParameters['google_client_id'] ?? '');
+        $urlParameters['google_gclid'] = $cookies['gclid'] ?? ($urlParameters['google_gclid'] ?? '');
         $urlParameters['facebook_fbp'] = $cookies['_fbp'] ?? ($urlParameters['facebook_fbp'] ?? '');
         $urlParameters['facebook_fbc'] = $cookies['_fbc'] ?? ($urlParameters['facebook_fbc'] ?? '');
 

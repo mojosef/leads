@@ -41,10 +41,12 @@ class AttributionCollector
     private function cookies(?Request $request, array $attribution): array
     {
         $cookies = [
-            '_ga' => $request?->cookie('_ga'),
-            '_fbp' => $request?->cookie('_fbp'),
-            '_fbc' => $request?->cookie('_fbc'),
+            '_ga' => $this->rawCookie($request, '_ga'),
+            '_fbp' => $this->rawCookie($request, '_fbp'),
+            '_fbc' => $this->rawCookie($request, '_fbc'),
             'fbclid' => $attribution['fbclid'] ?? $request?->query('fbclid'),
+            '_gcl_aw' => $this->rawCookie($request, '_gcl_aw'),
+            'gclid' => $attribution['gclid'] ?? $request?->query('gclid'),
         ];
 
         if (empty($cookies['_fbc']) && ! empty($cookies['fbclid'])) {
@@ -52,6 +54,28 @@ class AttributionCollector
         }
 
         return array_filter($cookies, static fn ($value) => $value !== null && $value !== '');
+    }
+
+    /**
+     * Read a third-party analytics cookie, falling back to the raw request
+     * header when Laravel's EncryptCookies middleware has stripped it.
+     *
+     * These cookies (_ga, _fbp, _fbc, _gcl_aw) are written by gtag / the Meta
+     * pixel in the browser, so they are never Laravel-encrypted. If the
+     * consuming app hasn't excluded them, EncryptCookies fails to decrypt them
+     * and nulls them out of $request->cookies. PHP's $_COOKIE superglobal is
+     * populated straight from the Cookie header and that middleware never
+     * touches it, so it still holds the real value.
+     */
+    private function rawCookie(?Request $request, string $name): ?string
+    {
+        $value = $request?->cookie($name);
+
+        if (($value === null || $value === '') && isset($_COOKIE[$name]) && is_string($_COOKIE[$name])) {
+            $value = $_COOKIE[$name];
+        }
+
+        return is_string($value) && $value !== '' ? $value : null;
     }
 
     /**
