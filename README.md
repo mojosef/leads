@@ -200,7 +200,6 @@ $pipeline->complete($lead, app(CrmMapper::class)->map($validated));
 Don't hardcode `in:` lists in `#[Validate]` attributes — use the `ValidatesContactForm` trait so every site validates against the same canonical values. It wires Livewire's `rules()`, `messages()` and `validationAttributes()` to the package's `FormValidator`, and adds `validateStep()` for multi-step forms (including the `dating_challenges.*` element rules; a typo'd field name in `stepFields()` throws instead of silently skipping validation):
 
 ```php
-use mojosef\Leads\ContactForm\CrmMapper;
 use mojosef\Leads\ContactForm\ValidatesContactForm;
 use mojosef\Leads\LeadPipeline;
 use mojosef\Leads\Models\Lead;
@@ -235,15 +234,16 @@ class SteppedPaidSearchForm extends Form
 
     public function save(): Lead
     {
-        $validated = $this->validate();
         $pipeline = app(LeadPipeline::class);
 
         $lead = $pipeline->start('paid_search');
 
-        return $pipeline->scheduleCompletion($lead, data: app(CrmMapper::class)->map($validated));
+     $pipeline->scheduleCompletion($lead, data: $this->validatedCrmPayload());
     }
 }
 ```
+
+Always hand the pipeline `validatedCrmPayload()` (or `CrmMapper::map($validated)`) — never the raw `$this->validate()` result. The raw data has unmapped keys (`first_name`, `phone_number`), so the Duo payload would use the wrong property names, the Lead's `fname`/`contact` columns would stay empty, and `form_schema_version` would be missing.
 
 The component calls `$this->form->validateStep(2)` as the user advances. A `protected array $stepFields = [...]` property works too — the trait picks it up when `stepFields()` isn't overridden. `validateStep()` throws a `LogicException` if the step has no fields defined, so a misconfigured step can never silently let unvalidated data through. Single-step forms just `use ValidatesContactForm;` and ignore steps entirely. To tighten free-text fields locally, override `additionalRules()` (e.g. `return ['first_name' => ['min:3']];`) — it merges onto the package rules, so the canonical enum rules always remain in force.
 

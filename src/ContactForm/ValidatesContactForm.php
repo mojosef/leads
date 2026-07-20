@@ -65,6 +65,20 @@ trait ValidatesContactForm
     }
 
     /**
+     * Validate the whole form and return the canonical CRM payload — the
+     * array to hand to LeadPipeline::complete() / scheduleCompletion().
+     * Always use this over passing $this->validate() to the pipeline
+     * directly: it applies the CRM property mapping (first_name => fname,
+     * phone_number => contact) and stamps form_schema_version.
+     *
+     * @return array<string, mixed>
+     */
+    public function validatedCrmPayload(): array
+    {
+        return app(CrmMapper::class)->map($this->validate());
+    }
+
+    /**
      * Which canonical fields belong to each step. Override this method in
      * stepped forms — or simply declare a `protected array $stepFields`
      * property, which is picked up automatically. Single-step forms can

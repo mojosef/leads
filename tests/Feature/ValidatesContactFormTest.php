@@ -70,6 +70,29 @@ it('includes checkbox element rules when validating a step by Question case', fu
         ->toEqualCanonicalizing(['dating_challenges', 'dating_challenges.*']);
 });
 
+it('returns a mapped CRM payload from validatedCrmPayload', function () {
+    $form = new class
+    {
+        use ValidatesContactForm;
+
+        public function validate($rules = null, $messages = [], $attributes = []): array
+        {
+            return [
+                'first_name' => 'Joe',
+                'phone_number' => '07903042428',
+                'age_bracket' => 'age_30_39',
+            ];
+        }
+    };
+
+    expect($form->validatedCrmPayload())->toBe([
+        'form_schema_version' => 1,
+        'age_bracket' => 'age_30_39',
+        'fname' => 'Joe',
+        'contact' => '07903042428',
+    ]);
+});
+
 it('throws for an undefined step instead of silently passing', function () {
     fakeContactForm()->validateStep(99);
 })->throws(LogicException::class, 'No contact-form fields defined for step [99]');
