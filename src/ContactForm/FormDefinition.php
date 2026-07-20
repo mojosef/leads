@@ -14,6 +14,24 @@ use mojosef\Leads\Enums\Question;
 class FormDefinition
 {
     /**
+     * Version of the form's business structure, stamped on every CRM payload.
+     * Owned by the package — bumped here when the canonical structure
+     * changes, never set per site.
+     */
+    public const SCHEMA_VERSION = 1;
+
+    /**
+     * Fields whose Duo property name differs from the canonical field name.
+     * Lives in code (not the shipped config) so a site publishing a partial
+     * contact_form config section can never accidentally drop the mapping —
+     * Laravel's config merge is shallow, defaults here are always present.
+     */
+    private const CRM_PROPERTY_DEFAULTS = [
+        'first_name' => 'fname',
+        'phone_number' => 'contact',
+    ];
+
+    /**
      * Enabled questions in display order.
      *
      * @return list<Question>
@@ -38,12 +56,13 @@ class FormDefinition
     }
 
     /**
-     * Display order. Falls back to the enum declaration order so a site only
-     * needs to set `order` on the questions it wants to move.
+     * Display order. Falls back to the enum declaration order (10, 20, …) so
+     * a site only needs to set `order` on the questions it wants to move,
+     * with room to slot a question before the first default.
      */
     public function order(Question $question): int
     {
-        $default = (int) array_search($question, Question::cases(), true) * 10;
+        $default = ((int) array_search($question, Question::cases(), true) + 1) * 10;
 
         return (int) config("leads.contact_form.questions.{$question->value}.order", $default);
     }
@@ -54,11 +73,14 @@ class FormDefinition
      */
     public function crmProperty(Question $question): string
     {
-        return (string) config("leads.contact_form.crm_properties.{$question->value}", $question->value);
+        return (string) config(
+            "leads.contact_form.crm_properties.{$question->value}",
+            self::CRM_PROPERTY_DEFAULTS[$question->value] ?? $question->value,
+        );
     }
 
     public function schemaVersion(): int
     {
-        return (int) config('leads.contact_form.schema_version', 1);
+        return self::SCHEMA_VERSION;
     }
 }

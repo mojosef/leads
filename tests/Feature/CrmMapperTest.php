@@ -2,6 +2,7 @@
 
 use Illuminate\Support\Facades\File;
 use mojosef\Leads\ContactForm\CrmMapper;
+use mojosef\Leads\ContactForm\FormDefinition;
 use mojosef\Leads\ContactForm\FormValidator;
 
 afterEach(function () {
@@ -67,10 +68,32 @@ it('applies the configured CRM property mapping without touching values', functi
         ->not->toHaveKey('age_bracket');
 });
 
-it('stamps the configured schema version', function () {
-    config()->set('leads.contact_form.schema_version', 2);
+it('stamps the package-owned schema version', function () {
+    expect(app(CrmMapper::class)->map([]))->toBe(['form_schema_version' => FormDefinition::SCHEMA_VERSION]);
+});
 
-    expect(app(CrmMapper::class)->map([]))->toBe(['form_schema_version' => 2]);
+it('applies all defaults when the contact_form config section is absent', function () {
+    config()->set('leads.contact_form', null);
+
+    $payload = app(CrmMapper::class)->map(app(FormValidator::class)->validate([
+        'age_bracket' => 'age_30_39',
+        'town' => 'Harrogate',
+        'marital_status' => 'divorced',
+        'search_goal' => 'marriage',
+        'dating_challenges' => ['limited_time'],
+        'meet_timeline' => 'within_6_months',
+        'investment_range' => 'gbp_4000_7999',
+        'support_level' => 'unsure',
+        'first_name' => 'Alex',
+        'email' => 'alex@example.com',
+        'phone_number' => '+44 7700 900123',
+    ]));
+
+    expect($payload['form_schema_version'])->toBe(1)
+        ->and($payload)->toHaveKey('fname', 'Alex')
+        ->and($payload)->toHaveKey('contact', '+44 7700 900123')
+        ->and($payload)->not->toHaveKey('first_name')
+        ->and($payload)->not->toHaveKey('phone_number');
 });
 
 it('omits unanswered optional questions instead of coercing them', function () {

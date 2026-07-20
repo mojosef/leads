@@ -161,22 +161,22 @@ The rendered wording changes; the submitted values remain `age_under_30` and `ag
 
 ### Composition per site
 
-`config/leads.php → contact_form` controls presentation concerns only:
+`config/leads.php → contact_form` controls presentation concerns only, and **every key is an optional override**. Sites whose published config predates this section need to change nothing: with no `contact_form` config at all, every question is enabled and required, ordering follows the enum declaration order, and the default CRM property mapping (`first_name → fname`, `phone_number → contact`) applies — those defaults live in package code, so a partial config section can't accidentally drop them. Only add what you want to change:
 
 ```php
 'contact_form' => [
-    'schema_version' => 1,
     'questions' => [
-        'support_level' => ['enabled' => true, 'required' => false, 'order' => 80],
+        'support_level' => ['required' => false],
         'town' => ['enabled' => false],
-        // ...
+        'email' => ['order' => 1],   // only relevant if you iterate FormDefinition::questions()
     ],
     'crm_properties' => [
-        'first_name' => 'fname',      // rename the CRM property, value untouched
-        'phone_number' => 'contact',
+        'age_bracket' => 'age_range', // rename the CRM property, value untouched
     ],
 ],
 ```
+
+`order` is ignorable — it only affects sites that render by iterating `FormDefinition::questions()`; templates that hardcode their field layout can skip it entirely. The `form_schema_version` is owned by the package (`FormDefinition::SCHEMA_VERSION`), not config, so a site can't pin or drift it.
 
 Config cannot redefine canonical enum values — only enable/disable, reorder, relax `required`, and map CRM property names.
 

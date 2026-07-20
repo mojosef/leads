@@ -15,7 +15,8 @@
       "Bash(git show *)",
       "Bash(composer dump-autoload *)",
       "Bash(vendor/bin/pest)",
-      "Bash(vendor/bin/pint --dirty)"
+      "Bash(vendor/bin/pint --dirty)",
+      "Bash(vendor/bin/pint --dirty --test)"
     ]
   }
 }
