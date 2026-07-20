@@ -197,24 +197,18 @@ $pipeline->complete($lead, app(CrmMapper::class)->map($validated));
 
 ### Livewire / stepped forms
 
-Don't hardcode `in:` lists in `#[Validate]` attributes — delegate the whole rule set to the package so every site validates against the same canonical values. Livewire `Form` objects can source `rules()`, `messages()` and `validationAttributes()` from `FormValidator`, and `rulesFor()` returns the rules for one step at a time (including the `dating_challenges.*` element rules, and throwing on a typo'd field name):
+Don't hardcode `in:` lists in `#[Validate]` attributes — use the `ValidatesContactForm` trait so every site validates against the same canonical values. It wires Livewire's `rules()`, `messages()` and `validationAttributes()` to the package's `FormValidator`, and adds `validateStep()` for multi-step forms (including the `dating_challenges.*` element rules; a typo'd field name in `stepFields()` throws instead of silently skipping validation):
 
 ```php
 use mojosef\Leads\ContactForm\CrmMapper;
-use mojosef\Leads\ContactForm\FormValidator;
+use mojosef\Leads\ContactForm\ValidatesContactForm;
 use mojosef\Leads\LeadPipeline;
 use mojosef\Leads\Models\Lead;
 use Livewire\Form;
 
 class SteppedPaidSearchForm extends Form
 {
-    /** Field names are the canonical Question enum values. */
-    protected array $stepFields = [
-        1 => ['age_bracket', 'town', 'marital_status'],
-        2 => ['search_goal', 'dating_challenges', 'meet_timeline'],
-        3 => ['investment_range', 'support_level'],
-        4 => ['first_name', 'email', 'phone_number'],
-    ];
+    use ValidatesContactForm;
 
     public $age_bracket;
     public $town;
@@ -228,24 +222,15 @@ class SteppedPaidSearchForm extends Form
     public $email;
     public $phone_number;
 
-    public function rules(): array
+    /** Field names are the canonical Question enum values. */
+    protected function stepFields(): array
     {
-        return app(FormValidator::class)->rules();
-    }
-
-    public function messages(): array
-    {
-        return app(FormValidator::class)->messages();
-    }
-
-    public function validationAttributes(): array
-    {
-        return app(FormValidator::class)->attributes();
-    }
-
-    public function validateStep(int $step): void
-    {
-        $this->validate(app(FormValidator::class)->rulesFor(...$this->stepFields[$step] ?? []));
+        return [
+            1 => ['age_bracket', 'town', 'marital_status'],
+            2 => ['search_goal', 'dating_challenges', 'meet_timeline'],
+            3 => ['investment_range', 'support_level'],
+            4 => ['first_name', 'email', 'phone_number'],
+        ];
     }
 
     public function save(): Lead
@@ -260,7 +245,7 @@ class SteppedPaidSearchForm extends Form
 }
 ```
 
-A site may tighten the free-text fields locally (`$rules['first_name'][] = 'min:3';` inside `rules()`) — but never widen or replace the enum rules on fixed-choice fields.
+The component calls `$this->form->validateStep(2)` as the user advances. Single-step forms just `use ValidatesContactForm;` and ignore `stepFields()`. To tighten free-text fields locally, override `additionalRules()` (e.g. `return ['first_name' => ['min:3']];`) — it merges onto the package rules, so the canonical enum rules always remain in force.
 
 ### CRM payload shape
 
