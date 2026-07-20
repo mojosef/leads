@@ -17,7 +17,8 @@
       "Bash(vendor/bin/pest)",
       "Bash(vendor/bin/pint --dirty)",
       "Bash(vendor/bin/pint --dirty --test)",
-      "Bash(vendor/bin/pest --filter=ValidatesContactForm)"
+      "Bash(vendor/bin/pest --filter=ValidatesContactForm)",
+      "WebFetch(domain:raw.githubusercontent.com)"
     ]
   }
 }

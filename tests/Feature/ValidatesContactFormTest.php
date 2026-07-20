@@ -70,10 +70,31 @@ it('includes checkbox element rules when validating a step by Question case', fu
         ->toEqualCanonicalizing(['dating_challenges', 'dating_challenges.*']);
 });
 
-it('validates nothing for an undefined step', function () {
-    $form = fakeContactForm();
+it('throws for an undefined step instead of silently passing', function () {
+    fakeContactForm()->validateStep(99);
+})->throws(LogicException::class, 'No contact-form fields defined for step [99]');
 
-    $form->validateStep(99);
+it('reads step fields from a stepFields property when the method is not overridden', function () {
+    $form = new class
+    {
+        use ValidatesContactForm;
 
-    expect($form->validateCalledWith['rules'])->toBe([]);
+        public ?array $validateCalledWith = null;
+
+        protected array $stepFields = [
+            1 => ['age_bracket', 'town'],
+        ];
+
+        public function validate($rules = null, $messages = [], $attributes = []): array
+        {
+            $this->validateCalledWith = compact('rules', 'messages', 'attributes');
+
+            return [];
+        }
+    };
+
+    $form->validateStep(1);
+
+    expect(array_keys($form->validateCalledWith['rules']))
+        ->toEqualCanonicalizing(['age_bracket', 'town']);
 });

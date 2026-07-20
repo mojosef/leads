@@ -245,7 +245,7 @@ class SteppedPaidSearchForm extends Form
 }
 ```
 
-The component calls `$this->form->validateStep(2)` as the user advances. Single-step forms just `use ValidatesContactForm;` and ignore `stepFields()`. To tighten free-text fields locally, override `additionalRules()` (e.g. `return ['first_name' => ['min:3']];`) — it merges onto the package rules, so the canonical enum rules always remain in force.
+The component calls `$this->form->validateStep(2)` as the user advances. A `protected array $stepFields = [...]` property works too — the trait picks it up when `stepFields()` isn't overridden. `validateStep()` throws a `LogicException` if the step has no fields defined, so a misconfigured step can never silently let unvalidated data through. Single-step forms just `use ValidatesContactForm;` and ignore steps entirely. To tighten free-text fields locally, override `additionalRules()` (e.g. `return ['first_name' => ['min:3']];`) — it merges onto the package rules, so the canonical enum rules always remain in force.
 
 ### CRM payload shape
 

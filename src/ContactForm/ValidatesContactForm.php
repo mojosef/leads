@@ -2,6 +2,7 @@
 
 namespace mojosef\Leads\ContactForm;
 
+use LogicException;
 use mojosef\Leads\Enums\Question;
 
 /**
@@ -44,24 +45,36 @@ trait ValidatesContactForm
 
     /**
      * Validate a single step of a multi-step form against the package rules
-     * for that step's fields (including checkbox element rules).
+     * for that step's fields (including checkbox element rules). Throws
+     * rather than silently passing when the step has no fields defined —
+     * a misconfigured step must never let unvalidated data through.
      */
     public function validateStep(int $step): void
     {
-        $rules = app(FormValidator::class)->rulesFor(...$this->stepFields()[$step] ?? []);
+        $fields = $this->stepFields()[$step] ?? [];
+
+        if ($fields === []) {
+            throw new LogicException(
+                "No contact-form fields defined for step [$step]. Define them in stepFields() or a \$stepFields property."
+            );
+        }
+
+        $rules = app(FormValidator::class)->rulesFor(...$fields);
 
         $this->validate($rules, $this->messages(), $this->validationAttributes());
     }
 
     /**
-     * Which canonical fields belong to each step. Override in stepped forms;
-     * single-step forms can ignore it.
+     * Which canonical fields belong to each step. Override this method in
+     * stepped forms — or simply declare a `protected array $stepFields`
+     * property, which is picked up automatically. Single-step forms can
+     * ignore both.
      *
      * @return array<int, list<Question|string>>
      */
     protected function stepFields(): array
     {
-        return [];
+        return property_exists($this, 'stepFields') ? (array) $this->stepFields : [];
     }
 
     /**
