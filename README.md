@@ -95,6 +95,196 @@ $pipeline->update($lead, ['fname' => $this->name, 'email' => $this->email]);
 $pipeline->complete($lead, ['occupation' => $this->occupation]);
 ```
 
+## Contact form
+
+The package centrally owns the fleet's contact-form structure: canonical field names, canonical answer values, validation, and the CRM payload shape. Sites customise **wording and composition only** — never the submitted values.
+
+### What the package fixes
+
+- **Field names** — the `mojosef\Leads\Enums\Question` string-backed enum: `age_bracket`, `town`, `marital_status`, `search_goal`, `dating_challenges`, `meet_timeline`, `investment_range`, `support_level`, `first_name`, `email`, `phone_number`.
+- **Answer values** — one string-backed enum per fixed answer set (`AgeBracket`, `MaritalStatus`, `SearchGoal`, `DatingChallenge`, `MeetTimeline`, `InvestmentRange`, `SupportLevel`), e.g. `age_30_39`, `gbp_4000_7999`, `unsure`.
+
+These backed values are a **permanent contract** between the sites, the package, Duo and analytics. Visible labels may be rebranded per site; the backed values must never be changed.
+
+### Consuming the fields
+
+The package ships no views — each site renders the form however it likes (Blade, Livewire, a JS front end) by iterating the definition. Use `Question->value` for input names, the answer enum values for option/checkbox values, and `label()` for visible wording:
+
+```blade
+@foreach (app(\mojosef\Leads\ContactForm\FormDefinition::class)->questions() as $question)
+    <label for="{{ $question->value }}">{{ $question->label() }}</label>
+
+    @if ($question->inputType() === \mojosef\Leads\Enums\InputType::Select)
+        <select name="{{ $question->value }}" id="{{ $question->value }}">
+            @foreach ($question->answerEnum()::cases() as $answer)
+                <option value="{{ $answer->value }}">{{ $answer->label() }}</option>
+            @endforeach
+        </select>
+    @elseif ($question->inputType() === \mojosef\Leads\Enums\InputType::Checkbox)
+        @foreach ($question->answerEnum()::cases() as $answer)
+            <label>
+                <input type="checkbox" name="{{ $question->value }}[]" value="{{ $answer->value }}">
+                {{ $answer->label() }}
+            </label>
+        @endforeach
+    @else
+        <input type="{{ $question->inputType()->value }}" name="{{ $question->value }}" id="{{ $question->value }}">
+    @endif
+@endforeach
+```
+
+`FormDefinition::questions()` returns the enabled questions in configured order; `isRequired()` tells you whether to mark a field required. Checkbox questions (`dating_challenges`) must submit as arrays (`name="dating_challenges[]"`). However the markup is built, the submitted names and values must be the canonical enum values — validation rejects anything else.
+
+### Overriding wording per site
+
+Publish the defaults (or just create the override file — partial overrides merge over the package defaults):
+
+```bash
+php artisan vendor:publish --tag=leads-translations
+```
+
+Then edit `lang/vendor/contact-form/en/form.php`:
+
+```php
+return [
+    'age_bracket' => [
+        'question' => 'Which age range are you in?',
+        'answers' => [
+            'age_under_30' => 'I’m under 30',
+            'age_30_39' => 'Between 30 and 39',
+        ],
+    ],
+];
+```
+
+The rendered wording changes; the submitted values remain `age_under_30` and `age_30_39`. Validation messages live in `lang/vendor/contact-form/en/validation.php`. All files are UTF-8, so `£` and en dashes are safe.
+
+### Composition per site
+
+`config/leads.php → contact_form` controls presentation concerns only:
+
+```php
+'contact_form' => [
+    'schema_version' => 1,
+    'questions' => [
+        'support_level' => ['enabled' => true, 'required' => false, 'order' => 80],
+        'town' => ['enabled' => false],
+        // ...
+    ],
+    'crm_properties' => [
+        'first_name' => 'fname',      // rename the CRM property, value untouched
+        'phone_number' => 'contact',
+    ],
+],
+```
+
+Config cannot redefine canonical enum values — only enable/disable, reorder, relax `required`, and map CRM property names.
+
+### Validation and submission
+
+```php
+use mojosef\Leads\ContactForm\CrmMapper;
+use mojosef\Leads\ContactForm\FormValidator;
+use mojosef\Leads\LeadPipeline;
+
+$validated = app(FormValidator::class)->validate($request->all());
+
+$lead = $pipeline->start('contact');
+$pipeline->complete($lead, app(CrmMapper::class)->map($validated));
+```
+
+`FormValidator` uses `Rule::enum()` for every fixed-choice answer (and per-element on checkbox arrays, with `distinct`), so an unknown or translated value is rejected before it can reach the pipeline. Unanswered optional questions are omitted from the payload — never coerced — so `null` and a real canonical answer like `unsure` stay distinct.
+
+### Livewire / stepped forms
+
+Don't hardcode `in:` lists in `#[Validate]` attributes — delegate the whole rule set to the package so every site validates against the same canonical values. Livewire `Form` objects can source `rules()`, `messages()` and `validationAttributes()` from `FormValidator`, and `rulesFor()` returns the rules for one step at a time (including the `dating_challenges.*` element rules, and throwing on a typo'd field name):
+
+```php
+use mojosef\Leads\ContactForm\CrmMapper;
+use mojosef\Leads\ContactForm\FormValidator;
+use mojosef\Leads\LeadPipeline;
+use mojosef\Leads\Models\Lead;
+use Livewire\Form;
+
+class SteppedPaidSearchForm extends Form
+{
+    /** Field names are the canonical Question enum values. */
+    protected array $stepFields = [
+        1 => ['age_bracket', 'town', 'marital_status'],
+        2 => ['search_goal', 'dating_challenges', 'meet_timeline'],
+        3 => ['investment_range', 'support_level'],
+        4 => ['first_name', 'email', 'phone_number'],
+    ];
+
+    public $age_bracket;
+    public $town;
+    public $marital_status;
+    public $search_goal;
+    public array $dating_challenges = [];
+    public $meet_timeline;
+    public $investment_range;
+    public $support_level;
+    public $first_name;
+    public $email;
+    public $phone_number;
+
+    public function rules(): array
+    {
+        return app(FormValidator::class)->rules();
+    }
+
+    public function messages(): array
+    {
+        return app(FormValidator::class)->messages();
+    }
+
+    public function validationAttributes(): array
+    {
+        return app(FormValidator::class)->attributes();
+    }
+
+    public function validateStep(int $step): void
+    {
+        $this->validate(app(FormValidator::class)->rulesFor(...$this->stepFields[$step] ?? []));
+    }
+
+    public function save(): Lead
+    {
+        $validated = $this->validate();
+        $pipeline = app(LeadPipeline::class);
+
+        $lead = $pipeline->start('paid_search');
+
+        return $pipeline->scheduleCompletion($lead, data: app(CrmMapper::class)->map($validated));
+    }
+}
+```
+
+A site may tighten the free-text fields locally (`$rules['first_name'][] = 'min:3';` inside `rules()`) — but never widen or replace the enum rules on fixed-choice fields.
+
+### CRM payload shape
+
+`CrmMapper::map()` emits canonical values only, keyed by the (optionally re-mapped) property names, plus a schema version:
+
+```json
+{
+    "form_schema_version": 1,
+    "age_bracket": "age_30_39",
+    "town": "Harrogate",
+    "marital_status": "divorced",
+    "search_goal": "marriage",
+    "dating_challenges": ["limited_time", "poor_match_quality"],
+    "meet_timeline": "within_6_months",
+    "investment_range": "gbp_4000_7999",
+    "support_level": "unsure",
+    "fname": "Alex",
+    "email": "alex@example.com",
+    "contact": "+44 7700 900123"
+}
+```
+
+Two sites with completely different branded wording send byte-identical payloads for the same answers. No CRM payload ever contains a translated display label.
+
 ## Delivery to Duo
 
 Frontend sites never deliver leads themselves. They only ever write rows to the shared database:

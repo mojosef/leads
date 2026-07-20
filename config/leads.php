@@ -159,4 +159,56 @@ return [
         //
     ],
 
+    /*
+    |--------------------------------------------------------------------------
+    | Contact form composition
+    |--------------------------------------------------------------------------
+    |
+    | Presentation and composition concerns only. Sites may enable/disable
+    | questions, reorder them, and relax `required` on optional questions.
+    | Canonical field names and answer values are fixed by the package's
+    | enums and CANNOT be redefined here — override visible wording in
+    | lang/vendor/contact-form/{locale}/form.php instead.
+    |
+    | questions: keyed by canonical field name (Question enum value).
+    |   enabled  — whether the question is rendered and validated.
+    |   required — whether an answer is mandatory. Optional questions left
+    |              unanswered are omitted from the CRM payload (never coerced
+    |              to 'unsure' or any other canonical value).
+    |   order    — display order; defaults to enum declaration order.
+    |
+    | crm_properties: canonical field name => CRM property name, for fields
+    |   where Duo's property differs from the package field name. Values are
+    |   untouched — only the key is renamed.
+    |
+    | schema_version: stamped on every CRM payload as form_schema_version so
+    |   downstream systems can detect future business-structure changes.
+    |
+    */
+
+    'contact_form' => [
+
+        'schema_version' => 1,
+
+        'questions' => [
+            'age_bracket' => ['enabled' => true, 'required' => true, 'order' => 10],
+            'town' => ['enabled' => true, 'required' => true, 'order' => 20],
+            'marital_status' => ['enabled' => true, 'required' => true, 'order' => 30],
+            'search_goal' => ['enabled' => true, 'required' => true, 'order' => 40],
+            'dating_challenges' => ['enabled' => true, 'required' => true, 'order' => 50],
+            'meet_timeline' => ['enabled' => true, 'required' => true, 'order' => 60],
+            'investment_range' => ['enabled' => true, 'required' => true, 'order' => 70],
+            'support_level' => ['enabled' => true, 'required' => true, 'order' => 80],
+            'first_name' => ['enabled' => true, 'required' => true, 'order' => 90],
+            'email' => ['enabled' => true, 'required' => true, 'order' => 100],
+            'phone_number' => ['enabled' => true, 'required' => true, 'order' => 110],
+        ],
+
+        'crm_properties' => [
+            'first_name' => 'fname',
+            'phone_number' => 'contact',
+        ],
+
+    ],
+
 ];

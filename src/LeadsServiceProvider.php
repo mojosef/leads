@@ -2,14 +2,17 @@
 
 namespace mojosef\Leads;
 
+use Illuminate\Routing\Router;
 use mojosef\Leads\Console\DispatchFacebookLeadsCommand;
 use mojosef\Leads\Console\DispatchPendingLeadsCommand;
 use mojosef\Leads\Console\FinalizeDraftsCommand;
 use mojosef\Leads\Console\HealthCommand;
 use mojosef\Leads\Console\MigrateCommand;
 use mojosef\Leads\Console\ResendFailedLeadsCommand;
+use mojosef\Leads\ContactForm\CrmMapper;
+use mojosef\Leads\ContactForm\FormDefinition;
+use mojosef\Leads\ContactForm\FormValidator;
 use mojosef\Leads\Http\Middleware\CaptureAttribution;
-use Illuminate\Routing\Router;
 use Spatie\LaravelPackageTools\Package;
 use Spatie\LaravelPackageTools\PackageServiceProvider;
 
@@ -34,6 +37,9 @@ class LeadsServiceProvider extends PackageServiceProvider
         $this->app->singleton(Facebook\FacebookLeadService::class);
         $this->app->singleton(LeadDispatcher::class);
         $this->app->singleton(LeadPipeline::class);
+        $this->app->singleton(FormDefinition::class);
+        $this->app->singleton(FormValidator::class);
+        $this->app->singleton(CrmMapper::class);
 
         $this->registerSharedConnections();
     }
@@ -84,6 +90,16 @@ class LeadsServiceProvider extends PackageServiceProvider
     {
         $router = $this->app->make(Router::class);
         $router->aliasMiddleware('capture-attribution', CaptureAttribution::class);
+
+        // Contact-form wording is registered under the `contact-form`
+        // namespace (not the package short name) so sites override it in
+        // lang/vendor/contact-form/{locale}/form.php. Only labels change —
+        // submitted values always come from the enums.
+        $this->loadTranslationsFrom(__DIR__.'/../lang', 'contact-form');
+
+        $this->publishes([
+            __DIR__.'/../lang' => $this->app->langPath('vendor/contact-form'),
+        ], 'leads-translations');
 
         // Migrations are NOT auto-loaded. The schema-owner site runs them via
         // the dedicated `leads:migrate` command, which targets the leads
