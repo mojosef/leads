@@ -85,6 +85,7 @@ return [
             'gbp_8000_11999' => '£8,000–£11,999',
             'gbp_12000_16000' => '£12,000–£16,000',
             'discuss_options_first' => 'I’d prefer to discuss the options first',
+            'out_of_range' => 'This is outside my current budget',
         ],
     ],
 
