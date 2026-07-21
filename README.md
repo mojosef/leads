@@ -238,10 +238,12 @@ class SteppedPaidSearchForm extends Form
 
         $lead = $pipeline->start('paid_search');
 
-     $pipeline->scheduleCompletion($lead, data: $this->validatedCrmPayload());
+        return $pipeline->scheduleCompletion($lead, data: $this->validatedCrmPayload());
     }
 }
 ```
+
+Every pipeline method returns the `Lead`, so `save()` can pass it straight through — the calling component typically needs it for the thank-you redirect (`$lead->id` for a `?token=` parameter, `$lead->fb_event_id` and `isFacebookEligible()` for browser-pixel dedup). If your component uses none of that, declare `save(): void` and drop the `return` instead.
 
 Always hand the pipeline `validatedCrmPayload()` (or `CrmMapper::map($validated)`) — never the raw `$this->validate()` result. The raw data has unmapped keys (`first_name`, `phone_number`), so the Duo payload would use the wrong property names, the Lead's `fname`/`contact` columns would stay empty, and `form_schema_version` would be missing.
 
