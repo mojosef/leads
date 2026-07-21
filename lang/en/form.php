@@ -32,6 +32,10 @@ return [
         'question' => 'Which town or city do you live in?',
     ],
 
+    'occupation' => [
+        'question' => 'What is your occupation?',
+    ],
+
     'marital_status' => [
         'question' => 'What is your marital status?',
         'answers' => [

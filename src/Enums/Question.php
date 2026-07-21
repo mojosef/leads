@@ -11,6 +11,7 @@ enum Question: string
 {
     case AgeBracket = 'age_bracket';
     case Town = 'town';
+    case Occupation = 'occupation';
     case MaritalStatus = 'marital_status';
     case SearchGoal = 'search_goal';
     case DatingChallenges = 'dating_challenges';
@@ -25,6 +26,7 @@ enum Question: string
     {
         return match ($this) {
             self::AgeBracket,
+            self::Occupation => InputType::Text,
             self::MaritalStatus,
             self::SearchGoal,
             self::MeetTimeline,

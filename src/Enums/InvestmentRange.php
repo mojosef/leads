@@ -11,6 +11,7 @@ enum InvestmentRange: string implements AnswerEnum
     case Gbp8000To11999 = 'gbp_8000_11999';
     case Gbp12000To16000 = 'gbp_12000_16000';
     case DiscussOptionsFirst = 'discuss_options_first';
+    case OutOfRange = 'out_of_range';
 
     public static function question(): Question
     {
