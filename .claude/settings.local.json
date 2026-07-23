@@ -18,7 +18,12 @@
       "Bash(vendor/bin/pint --dirty)",
       "Bash(vendor/bin/pint --dirty --test)",
       "Bash(vendor/bin/pest --filter=ValidatesContactForm)",
-      "WebFetch(domain:raw.githubusercontent.com)"
+      "WebFetch(domain:raw.githubusercontent.com)",
+      "Bash(git stash *)"
     ]
-  }
+  },
+  "enableAllProjectMcpServers": true,
+  "enabledMcpjsonServers": [
+    "laravel-boost"
+  ]
 }

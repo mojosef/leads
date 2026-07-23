@@ -4,6 +4,7 @@ namespace mojosef\Leads\Models;
 
 use mojosef\Leads\Models\Scopes\SiteScope;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Concerns\HasUlids;
 use Illuminate\Database\Eloquent\Model;
 use Throwable;
@@ -44,6 +45,16 @@ class Lead extends Model
             'fb_synced_at' => 'datetime',
             'last_error_at' => 'datetime',
         ];
+    }
+
+    /**
+     * @deprecated The column was renamed to `event_id` (the same token now
+     * serves as the Meta CAPI event_id and the Google Ads order_id). This
+     * shim keeps `$lead->fb_event_id` working while fleet sites migrate.
+     */
+    protected function fbEventId(): Attribute
+    {
+        return Attribute::get(fn (): ?string => $this->event_id);
     }
 
     public function scopeFailed(Builder $query): Builder

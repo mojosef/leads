@@ -22,7 +22,7 @@ class FacebookLeadService
      * multiple brands in one process — each call to the FB API uses the
      * pixel + token for that specific site.
      *
-     * The Lead's `fb_event_id` is sent as the CAPI event_id, deduplicating
+     * The Lead's `event_id` is sent as the CAPI event_id, deduplicating
      * against the browser pixel `Lead` event fired on the thank-you page.
      *
      * @return array<string, mixed>
@@ -44,7 +44,7 @@ class FacebookLeadService
 
         $event = (new Event)
             ->setEventName('Lead')
-            ->setEventId($lead->fb_event_id)
+            ->setEventId($lead->event_id)
             ->setEventTime($lead->created_at?->timestamp ?? time())
             ->setEventSourceUrl($lead->previous_url ?? '')
             ->setActionSource('website')
@@ -123,7 +123,7 @@ class FacebookLeadService
             Log::warning('Facebook CAPI Lead event failed', [
                 'lead_id' => $lead->id,
                 'site' => $lead->site,
-                'fb_event_id' => $lead->fb_event_id,
+                'event_id' => $lead->event_id,
                 'error' => $e->getMessage(),
             ]);
 

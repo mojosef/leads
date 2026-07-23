@@ -80,7 +80,7 @@ class PpcContactForm extends Component
 
         return redirect('/thank-you')->with([
             'fb_lead' => $lead->isFacebookEligible(),
-            'fb_event_id' => $lead->fb_event_id,
+            'event_id' => $lead->event_id,
         ]);
     }
 }
@@ -243,7 +243,7 @@ class SteppedPaidSearchForm extends Form
 }
 ```
 
-Every pipeline method returns the `Lead`, so `save()` can pass it straight through — the calling component typically needs it for the thank-you redirect (`$lead->id` for a `?token=` parameter, `$lead->fb_event_id` and `isFacebookEligible()` for browser-pixel dedup). If your component uses none of that, declare `save(): void` and drop the `return` instead.
+Every pipeline method returns the `Lead`, so `save()` can pass it straight through — the calling component typically needs it for the thank-you redirect (`$lead->id` for a `?token=` parameter, `$lead->event_id` and `isFacebookEligible()` for browser-pixel dedup). If your component uses none of that, declare `save(): void` and drop the `return` instead.
 
 Always hand the pipeline `validatedCrmPayload()` (or `CrmMapper::map($validated)`) — never the raw `$this->validate()` result. The raw data has unmapped keys (`first_name`, `phone_number`), so the Duo payload would use the wrong property names, the Lead's `fname`/`contact` columns would stay empty, and `form_schema_version` would be missing.
 
@@ -314,7 +314,7 @@ If no per-site entry exists, the service falls back to the global `conversions-a
 
 ### Browser pixel deduplication
 
-The package fires the **server-side** CAPI `Lead` event from the admin app's `leads:dispatch-facebook` cron. For it to deduplicate against the **browser** pixel `Lead` event — rather than Meta counting both and double-reporting the conversion — the frontend must fire its pixel with the *same* event id. That id is the Lead's `fb_event_id`, which the `complete()` example above flashes to the thank-you page.
+The package fires the **server-side** CAPI `Lead` event from the admin app's `leads:dispatch-facebook` cron. For it to deduplicate against the **browser** pixel `Lead` event — rather than Meta counting both and double-reporting the conversion — the frontend must fire its pixel with the *same* event id. That id is the Lead's `event_id`, which the `complete()` example above flashes to the thank-you page. The token is platform-neutral: the same value should be used as the Google Ads `transaction_id` / `order_id` when a site fires a browser gtag conversion or uploads server-side conversions, so each platform dedupes its own pair independently.
 
 A lead only fires the Facebook `Lead` event (browser pixel *and* server CAPI) when it is **Facebook-eligible** — i.e. it carried Facebook click attribution (an `fbclid`, or the `_fbc` cookie derived from one) at creation. Leads from Google, organic, or direct traffic send nothing to Meta. `isFacebookEligible()` reflects this; eligibility is decided once in `LeadPipeline::start()` and frozen onto the row, so the admin app sending the CAPI event and the frontend deciding whether to fire the pixel always agree — there is no per-form flag or cross-app config to keep in sync.
 
@@ -322,7 +322,7 @@ A lead only fires the Facebook `Lead` event (browser pixel *and* server CAPI) wh
 {{-- Thank-you page. Only fire when the lead was Facebook-eligible. --}}
 @if (session('fb_lead'))
     <script>
-        fbq('track', 'Lead', {}, { eventID: @json(session('fb_event_id')) });
+        fbq('track', 'Lead', {}, { eventID: @json(session('event_id')) });
     </script>
 @endif
 ```
@@ -332,9 +332,9 @@ The contract the package guarantees on the server side, which the browser event 
 | Field        | Value                                  |
 |--------------|----------------------------------------|
 | `event_name` | `Lead`                                 |
-| `eventID`    | the Lead's `fb_event_id` (a ULID)      |
+| `eventID`    | the Lead's `event_id` (a ULID)         |
 
-Firing the pixel itself — which pixel id, consent/CMP gating, server-rendered page vs. AJAX response — is the frontend's call; this package deliberately ships no JS. The only thing each site must ensure is that `fb_event_id` survives from the submission request to wherever the pixel fires (flash, redirect, or the JSON response body all work). Phone numbers, emails, and names are normalized and hashed server-side by the CAPI SDK — never send hashed values from the browser.
+Firing the pixel itself — which pixel id, consent/CMP gating, server-rendered page vs. AJAX response — is the frontend's call; this package deliberately ships no JS. The only thing each site must ensure is that `event_id` survives from the submission request to wherever the pixel fires (flash, redirect, or the JSON response body all work). Phone numbers, emails, and names are normalized and hashed server-side by the CAPI SDK — never send hashed values from the browser.
 
 ### Cron schedule
 

@@ -38,7 +38,7 @@ class LeadPipeline
             'payload' => [],
             'attribution' => $snapshot['attribution'],
             'cookies' => $snapshot['cookies'],
-            'fb_event_id' => (string) Str::ulid(),
+            'event_id' => (string) Str::ulid(),
             'fb_eligible' => $this->hasFacebookClick($snapshot['cookies']),
             'ip_address' => $snapshot['ip_address'],
             'user_agent' => $snapshot['user_agent'],
