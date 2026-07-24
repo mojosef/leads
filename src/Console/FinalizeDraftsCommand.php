@@ -2,9 +2,9 @@
 
 namespace mojosef\Leads\Console;
 
+use Illuminate\Console\Command;
 use mojosef\Leads\LeadPipeline;
 use mojosef\Leads\Models\Lead;
-use Illuminate\Console\Command;
 use Throwable;
 
 /**
@@ -13,8 +13,8 @@ use Throwable;
  * draft past `draft`.
  *
  * A draft is "expired" once `now() >= created_at + draft_timeout_seconds`.
- * The command transitions it to pending so the next `leads:dispatch-pending`
- * tick ships it to Duo.
+ * The command transitions it to pending so Duo picks it up on its next read
+ * of the shared database.
  */
 class FinalizeDraftsCommand extends Command
 {
@@ -45,6 +45,7 @@ class FinalizeDraftsCommand extends Command
 
         if ($candidates->isEmpty()) {
             $this->info('No expired drafts.');
+
             return self::SUCCESS;
         }
 
@@ -61,6 +62,7 @@ class FinalizeDraftsCommand extends Command
                     $lead->created_at?->toDateTimeString() ?? '-',
                     $lead->email ?: '-',
                 ));
+
                 continue;
             }
 

@@ -3,12 +3,8 @@
 namespace mojosef\Leads;
 
 use Illuminate\Routing\Router;
-use mojosef\Leads\Console\DispatchFacebookLeadsCommand;
-use mojosef\Leads\Console\DispatchPendingLeadsCommand;
 use mojosef\Leads\Console\FinalizeDraftsCommand;
 use mojosef\Leads\Console\HealthCommand;
-use mojosef\Leads\Console\MigrateCommand;
-use mojosef\Leads\Console\ResendFailedLeadsCommand;
 use mojosef\Leads\ContactForm\CrmMapper;
 use mojosef\Leads\ContactForm\FormDefinition;
 use mojosef\Leads\ContactForm\FormValidator;
@@ -23,19 +19,13 @@ class LeadsServiceProvider extends PackageServiceProvider
         $package
             ->name('leads')
             ->hasConfigFile('leads')
-            ->hasCommand(ResendFailedLeadsCommand::class)
-            ->hasCommand(MigrateCommand::class)
-            ->hasCommand(DispatchPendingLeadsCommand::class)
             ->hasCommand(FinalizeDraftsCommand::class)
-            ->hasCommand(DispatchFacebookLeadsCommand::class)
             ->hasCommand(HealthCommand::class);
     }
 
     public function packageRegistered(): void
     {
         $this->app->singleton(AttributionCollector::class);
-        $this->app->singleton(Facebook\FacebookLeadService::class);
-        $this->app->singleton(LeadDispatcher::class);
         $this->app->singleton(LeadPipeline::class);
         $this->app->singleton(FormDefinition::class);
         $this->app->singleton(FormValidator::class);
@@ -50,9 +40,8 @@ class LeadsServiceProvider extends PackageServiceProvider
      * if the host app already defines the same key, that wins, so existing
      * sites and bespoke overrides remain unaffected.
      *
-     * The package no longer queues any jobs (Facebook events are delivered by
-     * the admin app's `leads:dispatch-facebook` cron, not a worker), so no
-     * Redis or queue connection is registered here.
+     * The package no longer queues any jobs, so no Redis or queue connection
+     * is registered here.
      */
     private function registerSharedConnections(): void
     {
@@ -101,9 +90,7 @@ class LeadsServiceProvider extends PackageServiceProvider
             __DIR__.'/../lang' => $this->app->langPath('vendor/contact-form'),
         ], 'leads-translations');
 
-        // Migrations are NOT auto-loaded. The schema-owner site runs them via
-        // the dedicated `leads:migrate` command, which targets the leads
-        // connection so the migration record lands in the shared database
-        // alongside the table itself.
+        // The package ships no migrations. Duo owns the shared database
+        // schema; the package just reads and writes the leads table.
     }
 }

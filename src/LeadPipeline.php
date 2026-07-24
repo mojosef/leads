@@ -2,11 +2,11 @@
 
 namespace mojosef\Leads;
 
-use mojosef\Leads\Exceptions\LeadStateException;
-use mojosef\Leads\Models\Lead;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
+use mojosef\Leads\Exceptions\LeadStateException;
+use mojosef\Leads\Models\Lead;
 
 class LeadPipeline
 {
@@ -93,9 +93,8 @@ class LeadPipeline
      * already moved past draft (a later step or the admin cron beat us to it),
      * this is a no-op.
      *
-     * The package never dispatches the lead itself. Pending rows sit in the
-     * shared database until the leads-admin app's `leads:dispatch-pending`
-     * cron ships them to Duo.
+     * The package never delivers the lead anywhere. Pending rows sit in the
+     * shared database, which Duo reads directly to ingest new leads.
      *
      * @param  array<string, mixed>  $finalData
      */
@@ -164,16 +163,6 @@ class LeadPipeline
     }
 
     /**
-     * Re-queue a lead for delivery to Duo, used by the resend command. Resets
-     * it to pending and clears the last error; the admin app's
-     * `leads:dispatch-pending` cron picks it up on the next tick.
-     */
-    public function resend(Lead $lead): void
-    {
-        $lead->forceFill(['status' => Lead::STATUS_PENDING, 'last_error' => null])->save();
-    }
-
-    /**
      * Merge an arbitrary block of data into a draft lead's payload under a
      * named section. Designed for multi-step flows where any number of
      * follow-on components (questionnaire, lifestyle survey, preferences,
@@ -181,16 +170,16 @@ class LeadPipeline
      *
      * Does NOT auto-complete the lead. The lead stays as `draft` until either
      * the explicit `complete()` call or the admin app's `leads:finalize-drafts`
-     * cron fires once the draft timeout elapses. Duo only ever receives the
-     * lead as a single /lead/create with the full accumulated payload — there
-     * is no /lead/append concept in this system.
+     * cron fires once the draft timeout elapses. Duo only ever ingests the
+     * lead once it is `pending`, with the full accumulated payload — there is
+     * no append concept downstream.
      *
      * Idempotent per section: once `payload[$section.'_completed_at']` is
      * set, subsequent calls with the same section are no-ops.
      *
      * Non-draft leads are silently ignored (with a log warning). By the time
-     * a lead has moved past draft, the timeout has fired and Duo has been
-     * called — additional submissions can't be incorporated.
+     * a lead has moved past draft, the timeout has fired and Duo may already
+     * have ingested it — additional submissions can't be incorporated.
      *
      * @param  array<int|string, mixed>  $data
      */
@@ -206,6 +195,7 @@ class LeadPipeline
                 'status' => $lead->status,
                 'section' => $section,
             ]);
+
             return $lead;
         }
 
@@ -227,9 +217,9 @@ class LeadPipeline
     /**
      * A lead is Facebook-eligible when it carries Facebook click attribution —
      * an fbclid, or the _fbc cookie derived from one. Computed once here and
-     * frozen onto the row, so the admin app that later sends the CAPI event
-     * reads a fixed value rather than re-deriving it from config that may
-     * differ between the frontend and admin apps.
+     * frozen onto the row, so the frontend firing the browser pixel (and Duo,
+     * which sends the server-side CAPI event) reads a fixed value rather than
+     * re-deriving it from config.
      *
      * @param  array<string, mixed>  $cookies
      */
