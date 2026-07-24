@@ -26,14 +26,14 @@ enum Question: string
     {
         return match ($this) {
             self::AgeBracket,
-            self::Occupation => InputType::Text,
             self::MaritalStatus,
             self::SearchGoal,
             self::MeetTimeline,
-            self::InvestmentRange,
-            self::SupportLevel => InputType::Checkbox,
+            self::InvestmentRange => InputType::Select,
+            self::SupportLevel,
             self::DatingChallenges => InputType::Checkbox,
             self::Town,
+            self::Occupation,
             self::FirstName => InputType::Text,
             self::Email => InputType::Email,
             self::PhoneNumber => InputType::Tel,
