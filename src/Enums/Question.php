@@ -31,7 +31,7 @@ enum Question: string
             self::SearchGoal,
             self::MeetTimeline,
             self::InvestmentRange,
-            self::SupportLevel => InputType::Select,
+            self::SupportLevel => InputType::Checkbox,
             self::DatingChallenges => InputType::Checkbox,
             self::Town,
             self::FirstName => InputType::Text,

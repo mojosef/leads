@@ -6,9 +6,9 @@ enum SupportLevel: string implements AnswerEnum
 {
     use HasAnswerLabels;
 
-    case PersonalisedGuidance = 'personalised_guidance';
-    case DedicatedProactiveSearch = 'dedicated_proactive_search';
-    case HighestSupport = 'highest_support';
+    case ProfessionalHandpickedIntroductions = 'professional_handpicked_introductions';
+    case SafeSecureVettedDatabase = 'safe_secure_vetted_database';
+    case ExpertAdvice = 'expert_advice';
     case Unsure = 'unsure';
 
     public static function question(): Question

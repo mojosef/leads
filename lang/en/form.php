@@ -90,12 +90,12 @@ return [
     ],
 
     'support_level' => [
-        'question' => 'What level of support are you looking for?',
+        'question' => 'What are you looking for from a professional matchmaking service?',
         'answers' => [
-            'personalised_guidance' => 'Personalised guidance',
-            'dedicated_proactive_search' => 'A dedicated, proactive search',
-            'highest_support' => 'The highest level of support',
-            'unsure' => 'I’m not sure yet',
+            'professional_handpicked_introductions' => 'Handpicked personal introductions by a professional Matchmaker',
+            'safe_secure_vetted_database' => 'A safe and secure database of carefully vetted matches',
+            'expert_advice' => 'Honest and expert advice helping find someone compatible',
+            'unsure' => 'I\'m not sure yet',
         ],
     ],
 
