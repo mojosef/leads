@@ -14,7 +14,7 @@ function validContactSubmission(array $overrides = []): array
         'dating_challenges' => ['limited_time', 'poor_match_quality'],
         'meet_timeline' => 'within_6_months',
         'investment_range' => 'gbp_4000_7999',
-        'support_level' => 'personalised_guidance',
+        'support_level' => ['expert_advice'],
         'first_name' => 'Alex',
         'email' => 'alex@example.com',
         'phone_number' => '+44 7700 900123',
@@ -62,10 +62,10 @@ it('accepts null for an optional question while still accepting unsure as a real
     $validator = app(FormValidator::class);
 
     $withNull = $validator->validate(validContactSubmission(['support_level' => null]));
-    $withUnsure = $validator->validate(validContactSubmission(['support_level' => 'unsure']));
+    $withUnsure = $validator->validate(validContactSubmission(['support_level' => ['unsure']]));
 
     expect($withNull['support_level'])->toBeNull()
-        ->and($withUnsure['support_level'])->toBe('unsure');
+        ->and($withUnsure['support_level'])->toBe(['unsure']);
 });
 
 it('does not validate disabled questions', function () {
