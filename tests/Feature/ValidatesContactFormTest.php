@@ -1,5 +1,6 @@
 <?php
 
+use Illuminate\Support\Facades\Log;
 use mojosef\Leads\ContactForm\FormValidator;
 use mojosef\Leads\ContactForm\ValidatesContactForm;
 use mojosef\Leads\Enums\Question;
@@ -9,6 +10,14 @@ function fakeContactForm(): object
     return new class
     {
         use ValidatesContactForm;
+
+        public ?string $age_bracket = null;
+
+        public ?string $town = null;
+
+        public array $dating_challenges = [];
+
+        public ?string $first_name = null;
 
         /** @var array{rules: mixed, messages: mixed, attributes: mixed}|null */
         public ?array $validateCalledWith = null;
@@ -97,10 +106,84 @@ it('throws for an undefined step instead of silently passing', function () {
     fakeContactForm()->validateStep(99);
 })->throws(LogicException::class, 'No contact-form fields defined for step [99]');
 
+it('drops rules for fields the form does not declare as properties, and logs the gap', function () {
+    Log::shouldReceive('debug')
+        ->once()
+        ->withArgs(fn (string $message, array $context): bool => in_array('age_bracket', $context['fields'], true)
+            && ! in_array('first_name', $context['fields'], true));
+
+    $form = new class
+    {
+        use ValidatesContactForm;
+
+        public ?string $first_name = null;
+
+        public ?string $email = null;
+
+        public function validate($rules = null, $messages = [], $attributes = []): array
+        {
+            return [];
+        }
+    };
+
+    $rules = $form->rules();
+
+    expect($rules)->toHaveKeys(['first_name', 'email'])
+        ->not->toHaveKey('age_bracket')
+        ->not->toHaveKey('dating_challenges')
+        ->not->toHaveKey('dating_challenges.*');
+});
+
+it('keeps checkbox wildcard rules when the checkbox property is declared', function () {
+    $form = new class
+    {
+        use ValidatesContactForm;
+
+        public array $dating_challenges = [];
+
+        public function validate($rules = null, $messages = [], $attributes = []): array
+        {
+            return [];
+        }
+    };
+
+    expect($form->rules())->toHaveKeys(['dating_challenges', 'dating_challenges.*']);
+});
+
+it('drops undeclared step fields instead of throwing at validation time', function () {
+    $form = new class
+    {
+        use ValidatesContactForm;
+
+        public ?string $town = null;
+
+        public ?array $validateCalledWith = null;
+
+        protected array $stepFields = [
+            1 => ['age_bracket', 'town'],
+        ];
+
+        public function validate($rules = null, $messages = [], $attributes = []): array
+        {
+            $this->validateCalledWith = compact('rules', 'messages', 'attributes');
+
+            return [];
+        }
+    };
+
+    $form->validateStep(1);
+
+    expect(array_keys($form->validateCalledWith['rules']))->toBe(['town']);
+});
+
 it('reads step fields from a stepFields property when the method is not overridden', function () {
     $form = new class
     {
         use ValidatesContactForm;
+
+        public ?string $age_bracket = null;
+
+        public ?string $town = null;
 
         public ?array $validateCalledWith = null;
 

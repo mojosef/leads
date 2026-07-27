@@ -2,6 +2,8 @@
 
 namespace mojosef\Leads\ContactForm;
 
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Str;
 use LogicException;
 use mojosef\Leads\Enums\Question;
 
@@ -24,7 +26,9 @@ trait ValidatesContactForm
      */
     public function rules(): array
     {
-        return array_merge_recursive(app(FormValidator::class)->rules(), $this->additionalRules());
+        return $this->rulesForDeclaredProperties(
+            array_merge_recursive(app(FormValidator::class)->rules(), $this->additionalRules()),
+        );
     }
 
     /**
@@ -59,7 +63,7 @@ trait ValidatesContactForm
             );
         }
 
-        $rules = app(FormValidator::class)->rulesFor(...$fields);
+        $rules = $this->rulesForDeclaredProperties(app(FormValidator::class)->rulesFor(...$fields));
 
         $this->validate($rules, $this->messages(), $this->validationAttributes());
     }
@@ -89,6 +93,33 @@ trait ValidatesContactForm
     protected function stepFields(): array
     {
         return property_exists($this, 'stepFields') ? (array) $this->stepFields : [];
+    }
+
+    /**
+     * Drop rules for fields the host class does not declare as a property.
+     * A form's declared properties define which of the site's questions it
+     * asks — forms capturing only a subset are expected, and Livewire throws
+     * when asked to validate a property that doesn't exist. Drops are logged
+     * at debug level for diagnosing a field that unexpectedly isn't
+     * validating.
+     *
+     * @param  array<string, list<mixed>>  $rules
+     * @return array<string, list<mixed>>
+     */
+    protected function rulesForDeclaredProperties(array $rules): array
+    {
+        [$kept, $dropped] = collect($rules)->partition(
+            fn (array $fieldRules, string $key): bool => property_exists($this, Str::before($key, '.')),
+        );
+
+        if ($dropped->isNotEmpty()) {
+            Log::debug(
+                'Contact-form validation rules dropped for fields with no matching form property.',
+                ['form' => static::class, 'fields' => $dropped->keys()->all()],
+            );
+        }
+
+        return $kept->all();
     }
 
     /**
