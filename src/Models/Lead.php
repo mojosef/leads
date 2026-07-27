@@ -7,6 +7,7 @@ use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Concerns\HasUlids;
 use Illuminate\Database\Eloquent\Model;
 use mojosef\Leads\Models\Scopes\SiteScope;
+use mojosef\Leads\Support\PhoneNumber;
 
 class Lead extends Model
 {
@@ -89,5 +90,24 @@ class Lead extends Model
     public function hasCompletedSection(string $section): bool
     {
         return ! empty(($this->payload ?? [])[$section.'_completed_at']);
+    }
+
+    /**
+     * The session payload flashed on the post-submission redirect so the
+     * thank-you page can fire client-side conversion tracking (Meta pixel,
+     * GTM dataLayer, Google Ads enhanced conversions) with a consistent
+     * shape across every fleet brand. The phone is normalised to E.164, which
+     * Google and Meta expect for enhanced-conversion matching.
+     *
+     * @return array{fb_lead: bool, fb_event_id: string|null, lead_email: string|null, lead_phone: string|null}
+     */
+    public function trackingPayload(): array
+    {
+        return [
+            'fb_lead' => $this->isFacebookEligible(),
+            'fb_event_id' => $this->fb_event_id,
+            'lead_email' => $this->email,
+            'lead_phone' => PhoneNumber::toE164($this->contact),
+        ];
     }
 }
