@@ -4,6 +4,16 @@ All notable changes will be documented here.
 
 ## [Unreleased]
 
+### Removed — draft leads
+- **BREAKING: draft leads are gone.** `LeadPipeline::start()` no longer inserts a row — it builds the Lead in memory (attribution snapshot, ULID `id`, `event_id`, `fb_eligible`) and `complete()` performs the one and only insert, directly as `pending`. Abandoned forms write nothing; repeated `start()` calls create no duplicate rows. `created_at` now records submission time rather than form-start time. Calling `complete()` on an already-persisted lead is a logged no-op (double-clicked submits can't create a second row). Because the unsaved Lead cannot survive a request boundary (e.g. a Livewire hydration cycle), `start()` and `complete()` must run in the same request — as every documented pattern already does.
+- **Deleted:** the `leads:finalize-drafts` command, `LeadPipeline::update()` / `scheduleCompletion()` / `currentDraft()` / `append()`, the session draft storage (`leads.draft.{formKey}`), and the `draft_timeout_seconds` config key / `LEADS_DRAFT_TIMEOUT` env key. `Lead::STATUS_DRAFT` is retained read-only so fleet apps can still interpret legacy draft rows in the shared database.
+- **Changed:** `leads:health` no longer reports drafts and now exit-gates on stale **pending** rows (Duo ingestion behind) instead of stuck drafts. JSON contract change: `stuck.drafts_stuck` → `stuck.pending_stale`; `totals` now contains only `pending_total`.
+- **Migration:**
+  1. Before upgrading a fleet site, grep it for removed pipeline methods: `scheduleCompletion|currentDraft|->append(` and pipeline `->update(` calls — they now fatal with `Call to undefined method`. The standard `start()` + `complete()` submit flow needs no changes.
+  2. Run `leads:finalize-drafts` one final time (or upgrade leads-admin last) so in-flight drafts created by older package versions get promoted rather than stranded, then remove its cron entry.
+  3. Drop `LEADS_DRAFT_TIMEOUT` from every site's env.
+  4. Update any monitor parsing `leads:health --json` for the new `stuck`/`totals` shape.
+
 ### Added
 - `leads:health` command reports lead-pipeline backlog counts and is built for alerting: it **exits non-zero** when drafts are stuck beyond `--warn-hours` (default 48) — the signal that the `leads:finalize-drafts` cron has stopped or fallen behind. The `pending` backlog (Duo's ingestion queue, including a stale-pending count) is reported for visibility but doesn't drive the exit code, since clearing it is Duo's responsibility. Supports `--site`, `--warn-hours`, and `--json` (with an `alert` field) for external monitors. Schedule it with `->emailOutputOnFailure()`.
 

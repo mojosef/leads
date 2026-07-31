@@ -1,6 +1,6 @@
 # mojosef/leads
 
-Durable lead pipeline shared across the Duo CRM site fleet. Every lead is persisted to a row in the shared `leads` database, which Duo reads directly to ingest leads — the package makes no outbound HTTP at all, so nothing downstream being slow or down can lose a lead. Multi-step forms become a side-effect of having a draft row to update. Server-side ad-platform events (Meta CAPI, Google offline conversions) are Duo's job too — the package captures the attribution Duo needs and freezes it onto the row.
+Durable lead pipeline shared across the Duo CRM site fleet. Every submitted lead is written as a single `pending` row in the shared `leads` database, which Duo reads directly to ingest leads — the package makes no outbound HTTP at all, so nothing downstream being slow or down can lose a lead. An abandoned form writes nothing. Server-side ad-platform events (Meta CAPI, Google offline conversions) are Duo's job too — the package captures the attribution Duo needs and freezes it onto the row.
 
 ## Installation
 
@@ -24,9 +24,6 @@ LEADS_DB_DATABASE=leads_shared
 LEADS_DB_USERNAME=forge          # falls back to DB_USERNAME
 LEADS_DB_PASSWORD=               # falls back to DB_PASSWORD
 LEADS_DB_SOCKET=                 # falls back to DB_SOCKET
-
-# Multi-step forms (see "Handoff to Duo" below)
-LEADS_DRAFT_TIMEOUT=600          # seconds before an abandoned draft is finalised by the admin cron
 
 # Per-site Duo defaults
 LEADS_OFFICE_ID=21
@@ -73,14 +70,9 @@ class PpcContactForm extends Component
 }
 ```
 
-Multi-step:
+`start()` builds the Lead in memory — it snapshots attribution/cookies and assigns the `id`, `event_id` and `fb_eligible` up front — but persists nothing. `complete()` performs the single `pending` insert, so an abandoned form leaves no row.
 
-```php
-$lead = $pipeline->currentDraft('membership_apply') ?? $pipeline->start('membership_apply');
-$pipeline->update($lead, ['fname' => $this->name, 'email' => $this->email]);
-// ...later step...
-$pipeline->complete($lead, ['occupation' => $this->occupation]);
-```
+Multi-step forms hold their answers in component/session state and call `start()` + `complete()` together in the final submit. The unsaved Lead returned by `start()` cannot round-trip a Livewire hydration cycle, so both calls must happen in the same request.
 
 ## Contact form
 
@@ -223,14 +215,12 @@ class SteppedPaidSearchForm extends Form
     {
         $pipeline = app(LeadPipeline::class);
 
-        $lead = $pipeline->start('paid_search');
-
-        return $pipeline->scheduleCompletion($lead, data: $this->validatedCrmPayload());
+        return $pipeline->complete($pipeline->start('paid_search'), $this->validatedCrmPayload());
     }
 }
 ```
 
-Every pipeline method returns the `Lead`, so `save()` can pass it straight through — the calling component typically needs it for the thank-you redirect (`$lead->id` for a `?token=` parameter, `$lead->event_id` and `isFacebookEligible()` for browser-pixel dedup). If your component uses none of that, declare `save(): void` and drop the `return` instead.
+Both pipeline methods return the `Lead`, so `save()` can pass it straight through — the calling component typically needs it for the thank-you redirect (`$lead->id` for a `?token=` parameter, `$lead->event_id` and `isFacebookEligible()` for browser-pixel dedup). If your component uses none of that, declare `save(): void` and drop the `return` instead.
 
 Always hand the pipeline `validatedCrmPayload()` (or `CrmMapper::map($validated)`) — never the raw `$this->validate()` result. The raw data has unmapped keys (`first_name`, `phone_number`), so the Duo payload would use the wrong property names, the Lead's `fname`/`contact` columns would stay empty, and `form_schema_version` would be missing.
 
@@ -263,11 +253,10 @@ Two sites with completely different branded wording send byte-identical payloads
 
 The package never delivers leads anywhere. Sites only ever write rows to the shared database, and Duo reads that database directly to ingest new leads:
 
-- `LeadPipeline::complete()` promotes the lead `draft → pending`.
-- Multi-step forms call `update()` / `append()` (and optionally `scheduleCompletion()`) and leave the lead as `draft`.
+- `LeadPipeline::complete()` inserts the lead directly as `pending` — a single insert, no draft state.
 - Duo picks up `pending` rows itself; every status transition past `pending` (`sending` / `sent` / `failed` / `discarded`) is Duo's, as are ingestion retries.
 
-The only fleet-side moving part is the `leads:finalize-drafts` cron (see [Cron schedule](#cron-schedule)), which promotes abandoned multi-step drafts to `pending`. No site needs a queue worker, and no app makes outbound HTTP for leads.
+There are no fleet-side moving parts: no cron is required for lead flow, no site needs a queue worker, and no app makes outbound HTTP for leads.
 
 ### Ad-platform attribution (CAPI happens in Duo)
 
@@ -297,26 +286,15 @@ The contract the package guarantees on the server side, which the browser event 
 
 Firing the pixel itself — which pixel id, consent/CMP gating, server-rendered page vs. AJAX response — is the frontend's call; this package deliberately ships no JS. The only thing each site must ensure is that `event_id` survives from the submission request to wherever the pixel fires (flash, redirect, or the JSON response body all work). Never send hashed PII values from the browser — Duo normalizes and hashes server-side.
 
-### Cron schedule
-
-One command needs a cron, typically on the leads-admin app:
-
-```php
-// In the leads-admin app's app/Console/Kernel.php
-$schedule->command('leads:finalize-drafts')->everyMinute()->withoutOverlapping();
-```
-
-`leads:finalize-drafts` handles the multi-step timeout — drafts older than `LEADS_DRAFT_TIMEOUT` (default 600s) are promoted to `pending` automatically so abandoned PaidSearchForm submissions still reach Duo with whatever data they collected.
-
 ### Monitoring
 
-If the finalize-drafts cron stops, abandoned drafts pile up silently and never become visible to Duo. `leads:health` is the smoke detector — schedule it and surface failures:
+If Duo stops ingesting, pending rows pile up silently in the shared database. `leads:health` is the smoke detector — schedule it (typically on the leads-admin app) and surface failures:
 
 ```php
 $schedule->command('leads:health')->everyFifteenMinutes()->emailOutputOnFailure('ops@example.com');
 ```
 
-It **exits non-zero** when drafts are stuck beyond `--warn-hours` (default 48), which is what `emailOutputOnFailure()` (or any external monitor checking the exit code) keys off. The `pending` backlog — Duo's ingestion queue — is reported for visibility (including a stale-pending count) but doesn't trip the exit code, since clearing it is Duo's responsibility.
+It **exits non-zero** when pending rows are stuck beyond `--warn-hours` (default 48), which is what `emailOutputOnFailure()` (or any external monitor checking the exit code) keys off. The `--json` output reports the same counts under `stuck.pending_stale` / `totals.pending_total`, plus a top-level `alert` boolean.
 
 ```bash
 php artisan leads:health                 # human-readable table, all sites

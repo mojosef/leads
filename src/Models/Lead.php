@@ -14,10 +14,11 @@ class Lead extends Model
     use HasUlids;
 
     /**
-     * The package only ever writes `draft` and `pending`. Later transitions
-     * (`sending` / `sent` / `failed` / `discarded`) belong to Duo, which
-     * ingests pending rows straight from the shared database; the constants
-     * remain here so fleet apps read the shared schema consistently.
+     * The package only ever writes `pending`. `draft` is legacy — older
+     * package versions created draft rows and finalised them by cron; the
+     * constant remains so fleet apps can still read those rows. Later
+     * transitions (`sending` / `sent` / `failed` / `discarded`) belong to
+     * Duo, which ingests pending rows straight from the shared database.
      */
     public const STATUS_DRAFT = 'draft';
 

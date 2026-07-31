@@ -3,7 +3,6 @@
 namespace mojosef\Leads;
 
 use Illuminate\Routing\Router;
-use mojosef\Leads\Console\FinalizeDraftsCommand;
 use mojosef\Leads\Console\HealthCommand;
 use mojosef\Leads\ContactForm\CrmMapper;
 use mojosef\Leads\ContactForm\FormDefinition;
@@ -19,7 +18,6 @@ class LeadsServiceProvider extends PackageServiceProvider
         $package
             ->name('leads')
             ->hasConfigFile('leads')
-            ->hasCommand(FinalizeDraftsCommand::class)
             ->hasCommand(HealthCommand::class);
     }
 

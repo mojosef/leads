@@ -44,22 +44,6 @@ return [
 
     /*
     |--------------------------------------------------------------------------
-    | Draft completion timeout
-    |--------------------------------------------------------------------------
-    |
-    | For multi-step flows where a form schedules its completion (e.g. the
-    | PaidSearchForm waits for the user to finish a thank-you-page
-    | questionnaire), this is how long we wait before finalising the lead
-    | with whatever data we have. Once a draft is older than this, the admin
-    | app's `leads:finalize-drafts` cron promotes it to pending so the basic
-    | contact info still reaches Duo.
-    |
-    */
-
-    'draft_timeout_seconds' => (int) env('LEADS_DRAFT_TIMEOUT', 600),
-
-    /*
-    |--------------------------------------------------------------------------
     | Per-form-key configuration
     |--------------------------------------------------------------------------
     |

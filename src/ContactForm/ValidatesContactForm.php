@@ -70,7 +70,7 @@ trait ValidatesContactForm
 
     /**
      * Validate the whole form and return the canonical CRM payload — the
-     * array to hand to LeadPipeline::complete() / scheduleCompletion().
+     * array to hand to LeadPipeline::complete().
      * Always use this over passing $this->validate() to the pipeline
      * directly: it applies the CRM property mapping (first_name => fname,
      * phone_number => contact) and stamps form_schema_version.

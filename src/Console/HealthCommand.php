@@ -8,11 +8,10 @@ use mojosef\Leads\Models\Lead;
 
 /**
  * Smoke detector for the lead pipeline. Emits backlog counts and — crucially —
- * exits non-zero when drafts are stuck beyond --warn-hours, the signal that
- * the `leads:finalize-drafts` cron has stopped or fallen behind. That cron is
- * the only delivery-adjacent process the fleet still owns; ingestion of
- * pending rows is Duo's job (it reads the shared database directly), so the
- * pending backlog is reported for visibility but does not drive the exit code.
+ * exits non-zero when pending rows sit beyond --warn-hours, the signal that
+ * Duo has stopped ingesting from the shared database. The package writes each
+ * lead as a single `pending` row at submission; ingestion is Duo's job, so a
+ * stale pending backlog is the only fleet-visible failure mode left.
  *
  * Schedule it every few minutes and surface failures via Laravel's
  * ->emailOutputOnFailure() or an external monitor that checks the exit code or
@@ -22,33 +21,26 @@ class HealthCommand extends Command
 {
     protected $signature = 'leads:health
         {--site= : Restrict to a single site (defaults to all sites)}
-        {--warn-hours=48 : Age beyond which a stuck draft counts as stuck}
+        {--warn-hours=48 : Age beyond which a pending lead counts as stuck}
         {--json : Emit machine-readable JSON instead of a table}';
 
-    protected $description = 'Report lead-pipeline backlog counts; exits non-zero when the finalize-drafts cron is behind.';
+    protected $description = 'Report lead-pipeline backlog counts; exits non-zero when Duo ingestion is behind.';
 
     public function handle(): int
     {
         $warnHours = max(1, (int) $this->option('warn-hours'));
         $staleBefore = now()->subHours($warnHours);
 
-        // Exit-gating: the finalize-drafts cron drives this to zero.
+        // Exit-gating: Duo's ingestion drives this to zero.
         $stuck = [
-            'drafts_stuck' => $this->base()
-                ->where('status', Lead::STATUS_DRAFT)
-                ->where('created_at', '<=', $staleBefore)
-                ->count(),
-        ];
-
-        // Context: pending rows are Duo's ingestion queue — its backlog is
-        // worth seeing here, but clearing it is Duo's responsibility.
-        $totals = [
-            'draft_total' => $this->base()->where('status', Lead::STATUS_DRAFT)->count(),
-            'pending_total' => $this->base()->where('status', Lead::STATUS_PENDING)->count(),
             'pending_stale' => $this->base()
                 ->where('status', Lead::STATUS_PENDING)
                 ->where('created_at', '<=', $staleBefore)
                 ->count(),
+        ];
+
+        $totals = [
+            'pending_total' => $this->base()->where('status', Lead::STATUS_PENDING)->count(),
         ];
 
         $alerts = array_filter($stuck, static fn (int $n): bool => $n > 0);
@@ -69,16 +61,11 @@ class HealthCommand extends Command
         $this->line(sprintf('Lead health — site=%s — warn age >%dh', $this->option('site') ?: '*', $warnHours));
         $this->newLine();
 
-        $this->line('Stuck beyond threshold (a healthy pipeline clears these within minutes):');
-        $this->line(sprintf('  drafts   (finalize-drafts behind?)    %d', $stuck['drafts_stuck']));
-        $this->newLine();
-
         $this->line(sprintf(
-            'Totals: draft=%d pending=%d (stale pending >%dh: %d — Duo ingestion backlog, not gated)',
-            $totals['draft_total'],
+            'Totals: pending=%d (stale pending >%dh: %d — Duo ingestion backlog)',
             $totals['pending_total'],
             $warnHours,
-            $totals['pending_stale'],
+            $stuck['pending_stale'],
         ));
         $this->newLine();
 
