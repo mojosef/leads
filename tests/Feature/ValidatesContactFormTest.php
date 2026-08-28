@@ -95,7 +95,7 @@ it('returns a mapped CRM payload from validatedCrmPayload', function () {
     };
 
     expect($form->validatedCrmPayload())->toBe([
-        'form_schema_version' => 1,
+        'form_schema_version' => 2,
         'age_bracket' => 'age_30_39',
         'fname' => 'Joe',
         'contact' => '07903042428',

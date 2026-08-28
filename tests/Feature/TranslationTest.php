@@ -29,11 +29,10 @@ it('has a default translation for every answer enum case', function () {
     }
 });
 
-it('renders UTF-8 currency labels correctly', function () {
-    expect(InvestmentRange::UnderGbp4000->label())->toBe('Under £4,000')
-        ->and(InvestmentRange::Gbp4000To7999->label())->toBe('£4,000–£7,999')
-        ->and(InvestmentRange::Gbp8000To11999->label())->toBe('£8,000–£11,999')
-        ->and(InvestmentRange::Gbp12000To16000->label())->toBe('£12,000–£16,000');
+it('renders UTF-8 punctuation in labels correctly', function () {
+    expect(InvestmentRange::ReadyToInvest->label())->toBe('I’m ready to invest in the right membership')
+        ->and(InvestmentRange::UnderstandOptionsFirst->label())->toBe('I’d like to understand the options before committing')
+        ->and(InvestmentRange::ExploringNotReady->label())->toBe('I’m exploring and not ready to invest yet');
 });
 
 it('has a validation message for every rule the validator references', function () {

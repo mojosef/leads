@@ -61,6 +61,6 @@ it('exposes the canonical answer values on each answer enum', function (string $
     'search goal' => [SearchGoal::class, ['marriage', 'life_partner', 'long_term_relationship', 'exploring']],
     'dating challenge' => [DatingChallenge::class, ['low_quality_app_matches', 'limited_time', 'poor_match_quality', 'seeking_personalised_service', 'recently_divorced_or_separated']],
     'meet timeline' => [MeetTimeline::class, ['as_soon_as_possible', 'within_6_months', 'within_12_months', 'no_specific_timeline']],
-    'investment range' => [InvestmentRange::class, ['gbp_under_4000', 'gbp_4000_7999', 'gbp_8000_11999', 'gbp_12000_16000', 'discuss_options_first', 'out_of_range']],
+    'investment range' => [InvestmentRange::class, ['ready_to_invest', 'understand_options_first', 'exploring_not_ready']],
     'support level' => [SupportLevel::class, ['professional_handpicked_introductions', 'safe_secure_vetted_database', 'expert_advice', 'unsure']],
 ]);

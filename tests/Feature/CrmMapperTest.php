@@ -18,7 +18,7 @@ it('maps validated data to canonical values only', function () {
         'search_goal' => 'marriage',
         'dating_challenges' => ['limited_time', 'poor_match_quality'],
         'meet_timeline' => 'within_6_months',
-        'investment_range' => 'gbp_4000_7999',
+        'investment_range' => 'ready_to_invest',
         'support_level' => ['unsure'],
         'first_name' => 'Alex',
         'email' => 'alex@example.com',
@@ -26,7 +26,7 @@ it('maps validated data to canonical values only', function () {
     ]);
 
     expect($payload)->toBe([
-        'form_schema_version' => 1,
+        'form_schema_version' => 2,
         'age_bracket' => 'age_30_39',
         'town' => 'Harrogate',
         'occupation' => 'Architect',
@@ -34,7 +34,7 @@ it('maps validated data to canonical values only', function () {
         'search_goal' => 'marriage',
         'dating_challenges' => ['limited_time', 'poor_match_quality'],
         'meet_timeline' => 'within_6_months',
-        'investment_range' => 'gbp_4000_7999',
+        'investment_range' => 'ready_to_invest',
         'support_level' => ['unsure'],
         'fname' => 'Alex',
         'email' => 'alex@example.com',
@@ -45,7 +45,7 @@ it('maps validated data to canonical values only', function () {
 it('never contains translated display labels', function () {
     $payload = app(CrmMapper::class)->map([
         'age_bracket' => 'age_30_39',
-        'investment_range' => 'gbp_4000_7999',
+        'investment_range' => 'ready_to_invest',
         'dating_challenges' => ['limited_time'],
     ]);
 
@@ -53,7 +53,7 @@ it('never contains translated display labels', function () {
 
     expect($encoded)
         ->not->toContain('30–39')
-        ->not->toContain('£')
+        ->not->toContain('I’m ready to invest')
         ->not->toContain('Limited time');
 });
 
@@ -85,14 +85,14 @@ it('applies all defaults when the contact_form config section is absent', functi
         'search_goal' => 'marriage',
         'dating_challenges' => ['limited_time'],
         'meet_timeline' => 'within_6_months',
-        'investment_range' => 'gbp_4000_7999',
+        'investment_range' => 'ready_to_invest',
         'support_level' => ['unsure'],
         'first_name' => 'Alex',
         'email' => 'alex@example.com',
         'phone_number' => '+44 7700 900123',
     ]));
 
-    expect($payload['form_schema_version'])->toBe(1)
+    expect($payload['form_schema_version'])->toBe(2)
         ->and($payload)->toHaveKey('fname', 'Alex')
         ->and($payload)->toHaveKey('contact', '+44 7700 900123')
         ->and($payload)->not->toHaveKey('first_name')
@@ -111,7 +111,7 @@ it('omits unanswered optional questions instead of coercing them', function () {
 it('omits disabled questions from the payload', function () {
     config()->set('leads.contact_form.questions.investment_range.enabled', false);
 
-    $payload = app(CrmMapper::class)->map(['investment_range' => 'gbp_4000_7999']);
+    $payload = app(CrmMapper::class)->map(['investment_range' => 'ready_to_invest']);
 
     expect($payload)->not->toHaveKey('investment_range');
 });
@@ -125,7 +125,7 @@ it('sends an identical payload from two sites with different branded wording', f
         'search_goal' => 'marriage',
         'dating_challenges' => ['limited_time'],
         'meet_timeline' => 'within_6_months',
-        'investment_range' => 'gbp_4000_7999',
+        'investment_range' => 'ready_to_invest',
         'support_level' => ['unsure'],
         'first_name' => 'Alex',
         'email' => 'alex@example.com',
@@ -145,7 +145,7 @@ it('sends an identical payload from two sites with different branded wording', f
         ],
         'investment_range' => [
             'question' => 'What budget suits you best?',
-            'answers' => ['gbp_4000_7999' => 'A mid-tier membership'],
+            'answers' => ['ready_to_invest' => 'Ready to join today'],
         ],
     ], true).';');
 
@@ -153,5 +153,5 @@ it('sends an identical payload from two sites with different branded wording', f
 
     expect($siteB)->toBe($siteA)
         ->and($siteB['age_bracket'])->toBe('age_30_39')
-        ->and($siteB['investment_range'])->toBe('gbp_4000_7999');
+        ->and($siteB['investment_range'])->toBe('ready_to_invest');
 });

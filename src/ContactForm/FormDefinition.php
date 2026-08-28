@@ -18,7 +18,7 @@ class FormDefinition
      * Owned by the package — bumped here when the canonical structure
      * changes, never set per site.
      */
-    public const SCHEMA_VERSION = 1;
+    public const SCHEMA_VERSION = 2;
 
     /**
      * Fields whose Duo property name differs from the canonical field name.

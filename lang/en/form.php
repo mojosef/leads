@@ -78,14 +78,11 @@ return [
     ],
 
     'investment_range' => [
-        'question' => 'How much are you prepared to invest in finding the right partner?',
+        'question' => 'A membership is a significant investment, which best describes where you are?',
         'answers' => [
-            'gbp_under_4000' => 'Under £4,000',
-            'gbp_4000_7999' => '£4,000–£7,999',
-            'gbp_8000_11999' => '£8,000–£11,999',
-            'gbp_12000_16000' => '£12,000–£16,000',
-            'discuss_options_first' => 'I’d prefer to discuss the options first',
-            'out_of_range' => 'This is outside my current budget',
+            'ready_to_invest' => 'I’m ready to invest in the right membership',
+            'understand_options_first' => 'I’d like to understand the options before committing',
+            'exploring_not_ready' => 'I’m exploring and not ready to invest yet',
         ],
     ],
 
